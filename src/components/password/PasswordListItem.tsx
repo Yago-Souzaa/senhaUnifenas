@@ -1,10 +1,10 @@
+
 'use client';
 
 import { useState } from 'react';
 import type { PasswordEntry } from '@/types';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, Copy, Edit2, Trash2, ShieldCheck, ShieldAlert } from 'lucide-react';
 import {
@@ -17,7 +17,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+} from "@/components/ui/alert-dialog";
+import { cn } from '@/lib/utils';
 
 
 interface PasswordListItemProps {
@@ -73,90 +74,106 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
   const strength = passwordStrength(entry.senha);
 
   return (
-    <Card className="mb-4 shadow-lg hover:shadow-xl transition-shadow duration-300">
-      <CardHeader>
-        <div className="flex justify-between items-start">
-          <div>
-            <CardTitle className="font-headline text-xl text-primary">{entry.nome}</CardTitle>
-            {entry.ip && <CardDescription className="text-sm text-muted-foreground">IP: {entry.ip}</CardDescription>}
+    <Card className="mb-3 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-md">
+      {/* Linha 1: Título e Ícone de Força */}
+      <CardHeader className="py-3 px-4">
+        <div className="flex justify-between items-center">
+          <CardTitle className="font-headline text-lg text-primary truncate" title={entry.nome}>{entry.nome}</CardTitle>
+          <div className="shrink-0 ml-2">
+            {strength === 'strong' && <ShieldCheck className="text-green-500" size={20} />}
+            {strength === 'medium' && <ShieldAlert className="text-yellow-500" size={20} />}
+            {strength === 'weak' && <ShieldAlert className="text-red-500" size={20} />}
           </div>
-           {strength === 'strong' && <ShieldCheck className="text-green-500" size={24} />}
-           {strength === 'medium' && <ShieldAlert className="text-yellow-500" size={24} />}
-           {strength === 'weak' && <ShieldAlert className="text-red-500" size={24} />}
         </div>
       </CardHeader>
-      <CardContent>
-        <div className="space-y-3">
-          <div>
-            <label className="text-sm font-medium text-foreground/80">Login:</label>
-            <div className="flex items-center gap-2">
-              <Input type="text" value={entry.login} readOnly className="bg-muted/50" />
+
+      {/* Linha 2: Restante das coisas (Detalhes e Botões de Ação) */}
+      <CardContent className="pt-2 pb-3 px-4">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-x-4 gap-y-2">
+          {/* Coluna de Detalhes */}
+          <div className="text-xs space-y-1 flex-grow min-w-0">
+            {entry.ip && (
+              <p className="truncate"><strong className="text-foreground/70 font-medium">IP:</strong> {entry.ip}</p>
+            )}
+            <div className="flex items-center">
+              <strong className="text-foreground/70 font-medium w-12 shrink-0">Login:</strong>
+              <span className="truncate flex-1" title={entry.login}>{entry.login}</span>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
                 onClick={() => handleCopy(entry.login, "Login")}
-                className={`transition-transform duration-150 ${copiedField === "Login" ? 'scale-110 bg-accent text-accent-foreground' : ''}`}
+                className={cn(
+                  "h-6 w-6 ml-1 shrink-0 transition-transform duration-150",
+                  copiedField === "Login" ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent'
+                )}
                 aria-label="Copiar Login"
               >
-                <Copy size={18} />
+                <Copy size={12} />
               </Button>
             </div>
-          </div>
-          <div>
-            <label className="text-sm font-medium text-foreground/80">Senha:</label>
-            <div className="flex items-center gap-2">
-              <Input type={showPassword ? "text" : "password"} value={entry.senha || "N/A"} readOnly className="bg-muted/50" />
+            <div className="flex items-center">
+              <strong className="text-foreground/70 font-medium w-12 shrink-0">Senha:</strong>
+              <span className="truncate flex-1 font-mono" title={showPassword ? entry.senha : 'Revelar senha'}>
+                {showPassword ? (entry.senha || "N/A") : "••••••••"}
+              </span>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
                 onClick={() => setShowPassword(!showPassword)}
+                className="h-6 w-6 ml-1 shrink-0 text-muted-foreground hover:text-accent"
                 aria-label={showPassword ? "Esconder Senha" : "Mostrar Senha"}
               >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPassword ? <EyeOff size={12} /> : <Eye size={12} />}
               </Button>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="icon"
                 onClick={() => handleCopy(entry.senha, "Senha")}
-                className={`transition-transform duration-150 ${copiedField === "Senha" ? 'scale-110 bg-accent text-accent-foreground' : ''}`}
+                className={cn(
+                  "h-6 w-6 ml-1 shrink-0 transition-transform duration-150",
+                  copiedField === "Senha" ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent'
+                )}
                 aria-label="Copiar Senha"
               >
-                <Copy size={18} />
+                <Copy size={12} />
               </Button>
             </div>
+            {entry.funcao && (
+              <p className="truncate"><strong className="text-foreground/70 font-medium">Função:</strong> {entry.funcao}</p>
+            )}
+            {entry.acesso && (
+              <p className="truncate"><strong className="text-foreground/70 font-medium">Acesso:</strong> {entry.acesso}</p>
+            )}
+            {entry.versao && (
+              <p className="truncate"><strong className="text-foreground/70 font-medium">Versão:</strong> {entry.versao}</p>
+            )}
           </div>
-          {(entry.funcao || entry.acesso || entry.versao) && (
-            <div className="text-sm space-y-1 pt-2">
-              {entry.funcao && <p><strong className="text-foreground/80">Função:</strong> {entry.funcao}</p>}
-              {entry.acesso && <p><strong className="text-foreground/80">Acesso:</strong> {entry.acesso}</p>}
-              {entry.versao && <p><strong className="text-foreground/80">Versão:</strong> {entry.versao}</p>}
-            </div>
-          )}
-        </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="outline" size="sm" onClick={() => onEdit(entry)} className="hover:bg-secondary">
-            <Edit2 size={16} className="mr-1" /> Editar
-          </Button>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm" className="hover:bg-destructive/90">
-                <Trash2 size={16} className="mr-1" /> Deletar
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Esta ação não pode ser desfeita. Isso excluirá permanentemente a senha de <strong className="font-semibold">{entry.nome}</strong>.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={() => onDelete(entry.id)} className="bg-destructive hover:bg-destructive/90">Confirmar Exclusão</AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
 
+          {/* Coluna de Botões de Ação */}
+          <div className="flex flex-row md:flex-col gap-2 items-start self-start md:self-auto md:items-end shrink-0 mt-1 md:mt-0">
+            <Button variant="outline" size="sm" onClick={() => onEdit(entry)} className="text-xs h-7 px-2 hover:bg-secondary">
+              <Edit2 size={12} className="mr-1" /> Editar
+            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" className="text-xs h-7 px-2 hover:bg-destructive/90">
+                  <Trash2 size={12} className="mr-1" /> Deletar
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Esta ação não pode ser desfeita. Isso excluirá permanentemente a senha de <strong className="font-semibold">{entry.nome}</strong>.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => onDelete(entry.id)} className="bg-destructive hover:bg-destructive/90">Confirmar Exclusão</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
       </CardContent>
     </Card>
