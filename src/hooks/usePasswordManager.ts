@@ -18,7 +18,6 @@ export function usePasswordManager() {
       }
     } catch (error) {
       console.error("Failed to load passwords from local storage:", error);
-      // Optionally, notify the user
     }
     setIsLoading(false);
   }, []);
@@ -29,7 +28,6 @@ export function usePasswordManager() {
       setPasswords(updatedPasswords);
     } catch (error) {
       console.error("Failed to save passwords to local storage:", error);
-      // Optionally, notify the user
     }
   }, []);
 
@@ -53,7 +51,6 @@ export function usePasswordManager() {
 
   const importPasswords = useCallback((entries: Omit<PasswordEntry, 'id'>[]) => {
     const newEntries = entries.map(entry => ({ ...entry, id: uuidv4() }));
-    // Basic duplicate check by 'nome' and 'login' - can be more sophisticated
     const uniqueNewEntries = newEntries.filter(newEntry => 
       !passwords.some(existing => existing.nome === newEntry.nome && existing.login === newEntry.login)
     );
@@ -75,7 +72,6 @@ export function usePasswordManager() {
     if (useSymbols) charset += syms;
 
     if (charset === "") {
-        // Default to lowercase if nothing is selected, or handle error
         charset = lower; 
     }
 
@@ -86,6 +82,59 @@ export function usePasswordManager() {
     return newPassword;
   }, []);
 
+  const clearAllPasswords = useCallback(() => {
+    savePasswords([]);
+  }, [savePasswords]);
+
+  const escapeCSVField = (field?: string): string => {
+    if (field === null || typeof field === 'undefined') {
+      return '""';
+    }
+    const stringField = String(field);
+    // If the field contains a comma, newline, or double quote, wrap it in double quotes.
+    // Also, double up any existing double quotes.
+    if (stringField.includes(',') || stringField.includes('\n') || stringField.includes('"')) {
+      return `"${stringField.replace(/"/g, '""')}"`;
+    }
+    return `"${stringField}"`; // Always wrap in quotes for consistency
+  };
+  
+  const exportPasswordsToCSV = useCallback(() => {
+    if (passwords.length === 0) {
+      alert("Nenhuma senha para exportar."); // Or use toast
+      return;
+    }
+
+    const headers = ["nome", "ip", "login", "senha", "funcao", "acesso", "versao"];
+    const csvRows = [
+      headers.join(','), // Header row
+      ...passwords.map(p => 
+        [
+          escapeCSVField(p.nome),
+          escapeCSVField(p.ip),
+          escapeCSVField(p.login),
+          escapeCSVField(p.senha),
+          escapeCSVField(p.funcao),
+          escapeCSVField(p.acesso),
+          escapeCSVField(p.versao),
+        ].join(',')
+      )
+    ];
+    const csvString = csvRows.join('\r\n');
+    
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    if (link.download !== undefined) { // feature detection
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", "senhas_backup.csv");
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
+  }, [passwords]);
 
   return {
     passwords,
@@ -95,5 +144,7 @@ export function usePasswordManager() {
     deletePassword,
     importPasswords,
     generatePassword,
+    clearAllPasswords,
+    exportPasswordsToCSV,
   };
 }

@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -8,18 +9,30 @@ import { PasswordList } from '@/components/password/PasswordList';
 import { AddEditPasswordDialog } from '@/components/password/AddEditPasswordDialog';
 import { ImportPasswordsDialog } from '@/components/password/ImportPasswordsDialog';
 import { PasswordGeneratorDialog } from '@/components/password/PasswordGeneratorDialog';
+import { ClearAllPasswordsDialog } from '@/components/password/ClearAllPasswordsDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Upload, Zap, Search, ShieldAlert } from 'lucide-react';
+import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown } from 'lucide-react';
 
 export default function HomePage() {
-  const { passwords, isLoading, addPassword, updatePassword, deletePassword, importPasswords, generatePassword } = usePasswordManager();
+  const { 
+    passwords, 
+    isLoading, 
+    addPassword, 
+    updatePassword, 
+    deletePassword, 
+    importPasswords, 
+    generatePassword,
+    clearAllPasswords,
+    exportPasswordsToCSV,
+  } = usePasswordManager();
   const { toast } = useToast();
 
   const [isAddEditDialogOpen, setIsAddEditDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isGeneratorDialogOpen, setIsGeneratorDialogOpen] = useState(false);
+  const [isClearAllDialogOpen, setIsClearAllDialogOpen] = useState(false);
   const [editingPassword, setEditingPassword] = useState<PasswordEntry | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -63,6 +76,21 @@ export default function HomePage() {
          toast({ title: "Nenhuma Nova Senha", description: "Nenhuma senha nova foi importada. Podem ser duplicatas.", variant: "default" });
     }
   };
+  
+  const handleClearAllPasswords = () => {
+    clearAllPasswords();
+    toast({ title: "Tudo Limpo!", description: "Todas as senhas foram removidas.", variant: "destructive" });
+    setIsClearAllDialogOpen(false);
+  };
+
+  const handleExportPasswords = () => {
+    if (passwords.length === 0) {
+      toast({ title: "Nada para Exportar", description: "Não há senhas para exportar.", variant: "default" });
+      return;
+    }
+    exportPasswordsToCSV();
+    toast({ title: "Exportado!", description: "Suas senhas foram exportadas para senhas_backup.csv." });
+  };
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -92,15 +120,21 @@ export default function HomePage() {
               />
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             </div>
-            <div className="md:col-span-2 flex flex-col sm:flex-row gap-2 justify-end">
+            <div className="md:col-span-2 flex flex-wrap gap-2 justify-end">
               <Button onClick={() => { setEditingPassword(null); setIsAddEditDialogOpen(true); }} className="bg-primary hover:bg-primary/90">
                 <PlusCircle size={18} className="mr-2" /> Adicionar Nova
               </Button>
               <Button onClick={() => setIsImportDialogOpen(true)} variant="outline" className="hover:bg-secondary">
                 <Upload size={18} className="mr-2" /> Importar CSV
               </Button>
+               <Button onClick={handleExportPasswords} variant="outline" className="hover:bg-secondary">
+                <FileDown size={18} className="mr-2" /> Exportar CSV
+              </Button>
               <Button onClick={() => setIsGeneratorDialogOpen(true)} variant="outline" className="hover:bg-secondary">
                 <Zap size={18} className="mr-2" /> Gerar Senha
+              </Button>
+              <Button onClick={() => setIsClearAllDialogOpen(true)} variant="destructive" className="hover:bg-destructive/90">
+                <Trash2 size={18} className="mr-2" /> Limpar Tudo
               </Button>
             </div>
           </div>
@@ -130,6 +164,11 @@ export default function HomePage() {
         isOpen={isGeneratorDialogOpen}
         onOpenChange={setIsGeneratorDialogOpen}
         generatePasswordFunc={generatePassword}
+      />
+      <ClearAllPasswordsDialog
+        isOpen={isClearAllDialogOpen}
+        onOpenChange={setIsClearAllDialogOpen}
+        onConfirm={handleClearAllPasswords}
       />
       <footer className="text-center py-4 text-sm text-muted-foreground border-t mt-auto">
         SenhaFacil &copy; {new Date().getFullYear()}

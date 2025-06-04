@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { UploadCloud, FileText } from 'lucide-react';
+import { UploadCloud, FileText, Download } from 'lucide-react';
 
 interface ImportPasswordsDialogProps {
   isOpen: boolean;
@@ -22,7 +22,7 @@ interface ImportPasswordsDialogProps {
   onImport: (entries: Omit<PasswordEntry, 'id'>[]) => void;
 }
 
-// Expected CSV header columns (case-insensitive)
+// Expected CSV header columns (case-insensitive for parsing, but model will be lowercase)
 const EXPECTED_HEADERS = ["nome", "ip", "login", "senha", "funcao", "acesso", "versao"];
 
 
@@ -41,52 +41,53 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
 
   const parseCSV = (csvText: string): Omit<PasswordEntry, 'id'>[] => {
     const lines = csvText.split(/\r\n|\n/).filter(line => line.trim() !== '');
-    if (lines.length < 2) { // Must have header + at least one data row
+    if (lines.length < 2) { 
       throw new Error("CSV inválido ou vazio. Precisa de cabeçalho e pelo menos uma linha de dados.");
     }
 
     const headerLine = lines[0].toLowerCase();
-    const headers = headerLine.split(',').map(h => h.trim());
+    const headersFromFile = headerLine.split(',').map(h => h.trim());
     
-    // Validate headers
-    const missingHeaders = EXPECTED_HEADERS.filter(expected => !headers.includes(expected));
-    if (missingHeaders.length > 0 && !EXPECTED_HEADERS.every(h => headers.includes(h))) {
-       // Check if all expected headers are present
-       const allExpectedPresent = EXPECTED_HEADERS.every(expected => headers.includes(expected));
+    const missingHeaders = EXPECTED_HEADERS.filter(expected => !headersFromFile.includes(expected));
+    if (missingHeaders.length > 0 && !EXPECTED_HEADERS.every(h => headersFromFile.includes(h))) {
+       const allExpectedPresent = EXPECTED_HEADERS.every(expected => headersFromFile.includes(expected));
        if(!allExpectedPresent){
-         throw new Error(`Cabeçalho do CSV inválido. Colunas esperadas: ${EXPECTED_HEADERS.join(', ')}. Colunas encontradas: ${headers.join(', ')}.`);
+         throw new Error(`Cabeçalho do CSV inválido. Colunas esperadas (nesta ordem e com estes nomes): ${EXPECTED_HEADERS.join(', ')}. Colunas encontradas: ${headersFromFile.join(', ')}.`);
        }
     }
     
     const headerMap: { [key: string]: number } = {};
     EXPECTED_HEADERS.forEach(expectedHeader => {
-        const index = headers.indexOf(expectedHeader);
+        const index = headersFromFile.indexOf(expectedHeader);
         if (index !== -1) {
             headerMap[expectedHeader] = index;
+        } else {
+            // This case should be caught by the validation above, but as a safeguard:
+            console.warn(`Coluna esperada "${expectedHeader}" não encontrada no cabeçalho do CSV.`);
         }
     });
 
 
     const entries: Omit<PasswordEntry, 'id'>[] = [];
     for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(','); // Simple split, assumes no commas within fields
+      const values = lines[i].split(',').map(v => v.trim()); // Simple split, assumes no commas within fields for now
       
-      const nome = values[headerMap['nome']]?.trim();
-      const login = values[headerMap['login']]?.trim();
+      const nome = values[headerMap['nome']];
+      const login = values[headerMap['login']];
 
-      if (!nome || !login) { // Basic validation for required fields
+      if (!nome || !login) { 
         console.warn(`Linha ${i+1} ignorada: Nome ou Login ausentes.`);
         continue;
       }
 
       entries.push({
         nome,
-        ip: values[headerMap['ip']]?.trim() || undefined,
+        ip: values[headerMap['ip']] || undefined,
         login,
-        senha: values[headerMap['senha']]?.trim() || undefined,
-        funcao: values[headerMap['funcao']]?.trim() || undefined,
-        acesso: values[headerMap['acesso']]?.trim() || undefined,
-        versao: values[headerMap['versao']]?.trim() || undefined,
+        senha: values[headerMap['senha']] || undefined,
+        funcao: values[headerMap['funcao']] || undefined,
+        acesso: values[headerMap['acesso']] || undefined,
+        versao: values[headerMap['versao']] || undefined,
       });
     }
     return entries;
@@ -104,7 +105,7 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
       const parsedEntries = parseCSV(fileText);
       if (parsedEntries.length > 0) {
         onImport(parsedEntries);
-        toast({ title: "Importação Concluída", description: `${parsedEntries.length} senhas importadas com sucesso.` });
+        // toast is handled by parent component now
         onOpenChange(false);
         setFile(null); 
       } else {
@@ -122,6 +123,23 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
     document.getElementById('csv-file-input')?.click();
   };
 
+  const handleDownloadModel = () => {
+    const csvHeader = EXPECTED_HEADERS.join(',');
+    const blob = new Blob([csvHeader], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", "modelo_importacao_senhas.csv");
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        toast({title: "Modelo Baixado", description: "modelo_importacao_senhas.csv foi baixado."})
+    }
+  };
+
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { onOpenChange(open); if (!open) setFile(null); }}>
@@ -129,8 +147,9 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
         <DialogHeader>
           <DialogTitle className="font-headline text-primary">Importar Senhas de CSV</DialogTitle>
           <DialogDescription>
-            Selecione um arquivo CSV com as colunas: NOME, IP, LOGIN, SENHA, FUNCAO, ACESSO, VERSÃO.
-            A primeira linha deve ser o cabeçalho.
+            Selecione um arquivo CSV. A primeira linha deve ser o cabeçalho com as colunas: <br />
+            <code className="text-xs bg-muted p-1 rounded">{EXPECTED_HEADERS.join(', ')}</code><br />
+            As colunas 'nome' e 'login' são obrigatórias.
           </DialogDescription>
         </DialogHeader>
         <div className="py-4 space-y-4">
@@ -139,7 +158,7 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
               type="file"
               accept=".csv"
               onChange={handleFileChange}
-              className="hidden" // Hidden, triggered by button
+              className="hidden" 
             />
             <Button variant="outline" onClick={triggerFileInput} className="w-full justify-start text-left">
               {file ? <FileText className="mr-2 h-5 w-5 text-primary" /> : <UploadCloud className="mr-2 h-5 w-5 text-muted-foreground" />}
@@ -148,6 +167,9 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
             {file && (
                  <p className="text-xs text-muted-foreground">Arquivo selecionado: {file.name}</p>
             )}
+            <Button variant="ghost" onClick={handleDownloadModel} className="w-full justify-start text-left text-sm text-accent hover:text-accent/90">
+                <Download className="mr-2 h-4 w-4" /> Baixar Modelo CSV
+            </Button>
         </div>
         <DialogFooter>
           <DialogClose asChild>
