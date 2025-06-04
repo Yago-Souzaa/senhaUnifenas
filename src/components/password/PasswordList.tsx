@@ -4,6 +4,7 @@ import type { PasswordEntry } from '@/types';
 import { PasswordListItem } from './PasswordListItem';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle } from 'lucide-react';
+import { Card, CardHeader, CardContent } from '@/components/ui/card';
 
 interface PasswordListProps {
   passwords: PasswordEntry[];
