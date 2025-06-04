@@ -6,7 +6,7 @@ import type { PasswordEntry } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Copy, Edit2, Trash2, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { Eye, EyeOff, Copy, Edit2, Trash2, ShieldCheck, ShieldAlert, Info } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -75,7 +75,6 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
 
   return (
     <Card className="mb-3 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-md">
-      {/* Linha 1: Título e Ícone de Força */}
       <CardHeader className="py-3 px-4">
         <div className="flex justify-between items-center">
           <CardTitle className="font-headline text-lg text-primary truncate" title={entry.nome}>{entry.nome}</CardTitle>
@@ -87,14 +86,9 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
         </div>
       </CardHeader>
 
-      {/* Linha 2: Restante das coisas (Detalhes e Botões de Ação) */}
       <CardContent className="pt-2 pb-3 px-4">
         <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-x-4 gap-y-2">
-          {/* Coluna de Detalhes */}
           <div className="text-xs space-y-1 flex-grow min-w-0">
-            {entry.ip && (
-              <p className="truncate"><strong className="text-foreground/70 font-medium">IP:</strong> {entry.ip}</p>
-            )}
             <div className="flex items-center">
               <strong className="text-foreground/70 font-medium w-12 shrink-0">Login:</strong>
               <span className="truncate flex-1" title={entry.login}>{entry.login}</span>
@@ -138,18 +132,18 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
                 <Copy size={12} />
               </Button>
             </div>
-            {entry.funcao && (
-              <p className="truncate"><strong className="text-foreground/70 font-medium">Função:</strong> {entry.funcao}</p>
-            )}
-            {entry.acesso && (
-              <p className="truncate"><strong className="text-foreground/70 font-medium">Acesso:</strong> {entry.acesso}</p>
-            )}
-            {entry.versao && (
-              <p className="truncate"><strong className="text-foreground/70 font-medium">Versão:</strong> {entry.versao}</p>
+
+            {entry.customFields && entry.customFields.length > 0 && (
+              <div className="mt-1 pt-1 border-t border-border/50">
+                {entry.customFields.map((field, index) => (
+                  <p key={index} className="truncate text-xs">
+                    <strong className="text-foreground/70 font-medium">{field.label}:</strong> {field.value}
+                  </p>
+                ))}
+              </div>
             )}
           </div>
 
-          {/* Coluna de Botões de Ação */}
           <div className="flex flex-row md:flex-col gap-2 items-start self-start md:self-auto md:items-end shrink-0 mt-1 md:mt-0">
             <Button variant="outline" size="sm" onClick={() => onEdit(entry)} className="text-xs h-7 px-2 hover:bg-secondary">
               <Edit2 size={12} className="mr-1" /> Editar

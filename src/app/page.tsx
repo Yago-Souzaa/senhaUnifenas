@@ -6,7 +6,7 @@ import { usePasswordManager } from '@/hooks/usePasswordManager';
 import type { PasswordEntry } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { PasswordList } from '@/components/password/PasswordList';
-import { AddEditPasswordDialog } from '@/components/password/AddEditPasswordDialog';
+import { AddEditPasswordDialog, type PasswordFormValues } from '@/components/password/AddEditPasswordDialog';
 import { ImportPasswordsDialog } from '@/components/password/ImportPasswordsDialog';
 import { PasswordGeneratorDialog } from '@/components/password/PasswordGeneratorDialog';
 import { ClearAllPasswordsDialog } from '@/components/password/ClearAllPasswordsDialog';
@@ -22,7 +22,7 @@ export default function HomePage() {
     addPassword, 
     updatePassword, 
     deletePassword, 
-    importPasswords, 
+    importPasswords: importPasswordsHook, 
     generatePassword,
     clearAllPasswords,
     exportPasswordsToCSV,
@@ -36,23 +36,37 @@ export default function HomePage() {
   const [editingPassword, setEditingPassword] = useState<PasswordEntry | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const handleAddPassword = (data: Omit<PasswordEntry, 'id'>) => {
-    addPassword(data);
+  const handleAddPassword = (data: PasswordFormValues) => {
+    const entryToAdd: Omit<PasswordEntry, 'id'> = {
+      nome: data.nome,
+      login: data.login,
+      senha: data.senha,
+      customFields: data.customFields || [],
+    };
+    addPassword(entryToAdd);
     toast({ title: "Sucesso!", description: `Senha para "${data.nome}" adicionada.` });
   };
 
-  const handleUpdatePassword = (data: Omit<PasswordEntry, 'id'>, id: string) => {
-    updatePassword({ ...data, id });
+  const handleUpdatePassword = (data: PasswordFormValues, id: string) => {
+    const entryToUpdate: PasswordEntry = {
+      id,
+      nome: data.nome,
+      login: data.login,
+      senha: data.senha,
+      customFields: data.customFields || [],
+    };
+    updatePassword(entryToUpdate);
     toast({ title: "Sucesso!", description: `Senha para "${data.nome}" atualizada.` });
   };
 
-  const handleSubmitPasswordForm = (data: Omit<PasswordEntry, 'id'>, id?: string) => {
+  const handleSubmitPasswordForm = (data: PasswordFormValues, id?: string) => {
     if (id) {
       handleUpdatePassword(data, id);
     } else {
       handleAddPassword(data);
     }
     setEditingPassword(null);
+    setIsAddEditDialogOpen(false); // Close dialog after submit
   };
 
   const handleEditPassword = (entry: PasswordEntry) => {
@@ -68,12 +82,12 @@ export default function HomePage() {
     }
   };
 
-  const handleImport = (entries: Omit<PasswordEntry, 'id'>[]) => {
-    const imported = importPasswords(entries);
+  const handleImport = (entries: Array<Omit<PasswordEntry, 'id'>>) => {
+    const imported = importPasswordsHook(entries);
     if (imported.length > 0) {
          toast({ title: "Importação Concluída", description: `${imported.length} novas senhas importadas com sucesso.` });
     } else {
-         toast({ title: "Nenhuma Nova Senha", description: "Nenhuma senha nova foi importada. Podem ser duplicatas.", variant: "default" });
+         toast({ title: "Nenhuma Nova Senha", description: "Nenhuma senha nova foi importada. Podem ser duplicatas ou o arquivo estar vazio.", variant: "default" });
     }
   };
   
@@ -88,8 +102,12 @@ export default function HomePage() {
       toast({ title: "Nada para Exportar", description: "Não há senhas para exportar.", variant: "default" });
       return;
     }
-    exportPasswordsToCSV();
-    toast({ title: "Exportado!", description: "Suas senhas foram exportadas para senhas_backup.csv." });
+    const success = exportPasswordsToCSV();
+    if (success) {
+      toast({ title: "Exportado!", description: "Suas senhas foram exportadas para senhas_backup.csv." });
+    } else {
+      toast({ title: "Erro na Exportação", description: "Não foi possível exportar as senhas.", variant: "destructive" });
+    }
   };
 
   return (
@@ -133,7 +151,7 @@ export default function HomePage() {
               <Button onClick={() => setIsGeneratorDialogOpen(true)} variant="outline" className="hover:bg-secondary">
                 <Zap size={18} className="mr-2" /> Gerar Senha
               </Button>
-              <Button onClick={() => setIsClearAllDialogOpen(true)} variant="default">
+              <Button onClick={() => setIsClearAllDialogOpen(true)} variant="default" className="bg-primary hover:bg-primary/90">
                 <Trash2 size={18} className="mr-2" /> Limpar Tudo
               </Button>
             </div>
@@ -151,7 +169,10 @@ export default function HomePage() {
 
       <AddEditPasswordDialog
         isOpen={isAddEditDialogOpen}
-        onOpenChange={setIsAddEditDialogOpen}
+        onOpenChange={(open) => {
+          setIsAddEditDialogOpen(open);
+          if (!open) setEditingPassword(null); // Clear editing state when dialog closes
+        }}
         onSubmit={handleSubmitPasswordForm}
         initialData={editingPassword}
       />

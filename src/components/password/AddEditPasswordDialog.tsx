@@ -1,7 +1,8 @@
+
 'use client';
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray, Controller } from "react-hook-form";
 import * as z from "zod";
 import type { PasswordEntry } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -24,18 +25,21 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { useEffect } from "react";
+import { PlusCircle, Trash2 } from "lucide-react";
+
+const customFieldSchema = z.object({
+  label: z.string().min(1, { message: "Nome do campo é obrigatório." }),
+  value: z.string().min(1, { message: "Valor é obrigatório." }), // Making value optional might be better in some cases
+});
 
 const passwordFormSchema = z.object({
   nome: z.string().min(1, { message: "Nome é obrigatório." }),
-  ip: z.string().optional(),
   login: z.string().min(1, { message: "Login é obrigatório." }),
   senha: z.string().optional(),
-  funcao: z.string().optional(),
-  acesso: z.string().optional(),
-  versao: z.string().optional(),
+  customFields: z.array(customFieldSchema).optional(),
 });
 
-type PasswordFormValues = z.infer<typeof passwordFormSchema>;
+export type PasswordFormValues = z.infer<typeof passwordFormSchema>;
 
 interface AddEditPasswordDialogProps {
   isOpen: boolean;
@@ -47,24 +51,53 @@ interface AddEditPasswordDialogProps {
 export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialData }: AddEditPasswordDialogProps) {
   const form = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordFormSchema),
-    defaultValues: initialData || {
+    defaultValues: {
       nome: "",
-      ip: "",
       login: "",
       senha: "",
-      funcao: "",
-      acesso: "",
-      versao: "",
+      customFields: [],
     },
   });
 
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "customFields",
+  });
+
   useEffect(() => {
-    if (initialData) {
-      form.reset(initialData);
-    } else {
-      form.reset({
-        nome: "", ip: "", login: "", senha: "", funcao: "", acesso: "", versao: "",
-      });
+    if (isOpen) {
+      if (initialData) {
+        // Migrate old fields (ip, funcao etc.) to customFields if they exist and are not already in customFields
+        const migratedCustomFields: Array<{ label: string; value: string }> = initialData.customFields ? [...initialData.customFields] : [];
+        const oldOptionalFieldsMap: Record<string, string> = {
+          ip: "IP",
+          funcao: "Função",
+          acesso: "Acesso",
+          versao: "Versão",
+        };
+
+        for (const key in oldOptionalFieldsMap) {
+          // @ts-ignore
+          if (initialData[key] && !migratedCustomFields.some(cf => cf.label === oldOptionalFieldsMap[key])) {
+            // @ts-ignore
+            migratedCustomFields.push({ label: oldOptionalFieldsMap[key], value: initialData[key] });
+          }
+        }
+        
+        form.reset({
+          nome: initialData.nome || "",
+          login: initialData.login || "",
+          senha: initialData.senha || "",
+          customFields: migratedCustomFields,
+        });
+      } else {
+        form.reset({
+          nome: "",
+          login: "",
+          senha: "",
+          customFields: [], // Start with common fields or empty
+        });
+      }
     }
   }, [initialData, form, isOpen]);
 
@@ -75,7 +108,7 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[480px] bg-card">
+      <DialogContent className="sm:max-w-md md:max-w-lg bg-card max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="font-headline text-primary">{initialData ? "Editar Senha" : "Adicionar Nova Senha"}</DialogTitle>
           <DialogDescription>
@@ -83,7 +116,7 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-2">
+          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4 py-2 overflow-y-auto flex-grow pr-2">
             <FormField
               control={form.control}
               name="nome"
@@ -92,19 +125,6 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
                   <FormLabel>Nome <span className="text-destructive">*</span></FormLabel>
                   <FormControl>
                     <Input placeholder="Ex: Servidor Principal" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="ip"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>IP</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ex: 192.168.1.100" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -136,46 +156,53 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="funcao"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Função</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ex: Banco de Dados" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="acesso"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Acesso</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ex: SSH, RDP" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="versao"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Versão</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ex: 1.2.3" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <DialogFooter>
+            
+            <div className="space-y-3">
+              <h3 className="text-sm font-medium text-foreground mt-4 mb-2">Campos Personalizados:</h3>
+              {fields.map((field, index) => (
+                <div key={field.id} className="flex items-end gap-2 p-3 border rounded-md bg-muted/50">
+                  <FormField
+                    control={form.control}
+                    name={`customFields.${index}.label`}
+                    render={({ field: labelField }) => (
+                      <FormItem className="flex-1">
+                        <FormLabel className="text-xs">Nome do Campo</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ex: IP, Observação" {...labelField} className="h-9 text-sm"/>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name={`customFields.${index}.value`}
+                    render={({ field: valueField }) => (
+                      <FormItem className="flex-1">
+                        <FormLabel className="text-xs">Valor do Campo</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Ex: 192.168.1.1" {...valueField} className="h-9 text-sm"/>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)} className="h-9 w-9 shrink-0">
+                    <Trash2 size={16} className="text-destructive" />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => append({ label: "", value: "" })}
+                className="mt-2 text-xs"
+              >
+                <PlusCircle size={16} className="mr-2" /> Adicionar Campo Personalizado
+              </Button>
+            </div>
+            <DialogFooter className="mt-auto pt-4 sticky bottom-0 bg-card">
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancelar</Button>
               </DialogClose>

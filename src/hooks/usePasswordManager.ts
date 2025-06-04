@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
@@ -6,15 +7,54 @@ import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
 
 const STORAGE_KEY = 'senhaFacilPasswords';
 
+// Helper to migrate old data if necessary
+const migrateOldEntry = (entry: any): PasswordEntry => {
+  const newEntry: PasswordEntry = {
+    id: entry.id,
+    nome: entry.nome,
+    login: entry.login,
+    senha: entry.senha,
+    customFields: entry.customFields || [],
+  };
+
+  // Migrate old optional fields to customFields if they exist and aren't already there
+  const oldFieldsToMigrate: Array<{ oldKey: keyof PasswordEntry; label: string }> = [
+    { oldKey: 'ip', label: 'IP' },
+    { oldKey: 'funcao', label: 'Função' },
+    { oldKey: 'acesso', label: 'Acesso' },
+    { oldKey: 'versao', label: 'Versão' },
+  ];
+
+  oldFieldsToMigrate.forEach(({ oldKey, label }) => {
+    if (entry[oldKey] && !newEntry.customFields?.some(cf => cf.label === label)) {
+      newEntry.customFields?.push({ label, value: entry[oldKey] });
+    }
+  });
+  // Remove old keys from the direct entry object after migration
+  // delete newEntry.ip; 
+  // delete newEntry.funcao;
+  // delete newEntry.acesso;
+  // delete newEntry.versao;
+
+
+  return newEntry;
+};
+
+
 export function usePasswordManager() {
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     try {
-      const storedPasswords = localStorage.getItem(STORAGE_KEY);
-      if (storedPasswords) {
-        setPasswords(JSON.parse(storedPasswords));
+      const storedPasswordsJson = localStorage.getItem(STORAGE_KEY);
+      if (storedPasswordsJson) {
+        const storedPasswordsRaw = JSON.parse(storedPasswordsJson);
+        // Migrate data on load
+        const migratedPasswords = storedPasswordsRaw.map(migrateOldEntry);
+        setPasswords(migratedPasswords);
+        // Optionally, re-save migrated data
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedPasswords));
       }
     } catch (error) {
       console.error("Failed to load passwords from local storage:", error);
@@ -31,8 +71,8 @@ export function usePasswordManager() {
     }
   }, []);
 
-  const addPassword = useCallback((entry: Omit<PasswordEntry, 'id'>) => {
-    const newPassword: PasswordEntry = { ...entry, id: uuidv4() };
+  const addPassword = useCallback((entryData: Omit<PasswordEntry, 'id'>) => {
+    const newPassword: PasswordEntry = { ...entryData, id: uuidv4() };
     const updatedPasswords = [...passwords, newPassword];
     savePasswords(updatedPasswords);
     return newPassword;
@@ -49,11 +89,13 @@ export function usePasswordManager() {
     savePasswords(updatedPasswords);
   }, [passwords, savePasswords]);
 
-  const importPasswords = useCallback((entries: Omit<PasswordEntry, 'id'>[]) => {
-    const newEntries = entries.map(entry => ({ ...entry, id: uuidv4() }));
-    const uniqueNewEntries = newEntries.filter(newEntry => 
+  const importPasswords = useCallback((entries: Array<Omit<PasswordEntry, 'id'>>) => {
+    const newEntriesWithId = entries.map(entry => ({ ...entry, id: uuidv4() }));
+    
+    const uniqueNewEntries = newEntriesWithId.filter(newEntry => 
       !passwords.some(existing => existing.nome === newEntry.nome && existing.login === newEntry.login)
     );
+    
     const updatedPasswords = [...passwords, ...uniqueNewEntries];
     savePasswords(updatedPasswords);
     return uniqueNewEntries;
@@ -88,35 +130,40 @@ export function usePasswordManager() {
 
   const escapeCSVField = (field?: string): string => {
     if (field === null || typeof field === 'undefined') {
-      return '""';
+      return '""'; // Return empty quoted string for undefined/null
     }
     const stringField = String(field);
-    // If the field contains a comma, newline, or double quote, wrap it in double quotes.
-    // Also, double up any existing double quotes.
     if (stringField.includes(',') || stringField.includes('\n') || stringField.includes('"')) {
       return `"${stringField.replace(/"/g, '""')}"`;
     }
     return `"${stringField}"`; // Always wrap in quotes for consistency
   };
+
+  const getCustomFieldValue = (fields: Array<{label: string; value: string}> | undefined, label: string): string | undefined => {
+    return fields?.find(f => f.label.toLowerCase() === label.toLowerCase())?.value;
+  };
   
   const exportPasswordsToCSV = useCallback(() => {
     if (passwords.length === 0) {
-      alert("Nenhuma senha para exportar."); // Or use toast
-      return;
+      // toast({ title: "Nada para Exportar", description: "Não há senhas para exportar.", variant: "default" });
+      // This should be handled by the caller UI
+      return false;
     }
 
-    const headers = ["nome", "ip", "login", "senha", "funcao", "acesso", "versao"];
+    // Fixed headers plus common custom fields
+    const headers = ["nome", "login", "senha", "ip", "funcao", "acesso", "versao"];
+    
     const csvRows = [
-      headers.join(','), // Header row
+      headers.join(','),
       ...passwords.map(p => 
         [
           escapeCSVField(p.nome),
-          escapeCSVField(p.ip),
           escapeCSVField(p.login),
           escapeCSVField(p.senha),
-          escapeCSVField(p.funcao),
-          escapeCSVField(p.acesso),
-          escapeCSVField(p.versao),
+          escapeCSVField(getCustomFieldValue(p.customFields, "IP")),
+          escapeCSVField(getCustomFieldValue(p.customFields, "Função")),
+          escapeCSVField(getCustomFieldValue(p.customFields, "Acesso")),
+          escapeCSVField(getCustomFieldValue(p.customFields, "Versão")),
         ].join(',')
       )
     ];
@@ -124,7 +171,7 @@ export function usePasswordManager() {
     
     const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
-    if (link.download !== undefined) { // feature detection
+    if (link.download !== undefined) {
         const url = URL.createObjectURL(blob);
         link.setAttribute("href", url);
         link.setAttribute("download", "senhas_backup.csv");
@@ -133,7 +180,9 @@ export function usePasswordManager() {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(url);
+        return true;
     }
+    return false;
   }, [passwords]);
 
   return {

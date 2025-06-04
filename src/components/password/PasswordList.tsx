@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { PasswordEntry } from '@/types';
@@ -15,13 +16,22 @@ interface PasswordListProps {
 }
 
 export function PasswordList({ passwords, isLoading, onEdit, onDelete, searchTerm }: PasswordListProps) {
-  const filteredPasswords = passwords.filter(p =>
-    p.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.login.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.ip && p.ip.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (p.funcao && p.funcao.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (p.acesso && p.acesso.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredPasswords = passwords.filter(p => {
+    const lowerSearchTerm = searchTerm.toLowerCase();
+    if (p.nome.toLowerCase().includes(lowerSearchTerm)) return true;
+    if (p.login.toLowerCase().includes(lowerSearchTerm)) return true;
+    if (p.customFields) {
+      for (const field of p.customFields) {
+        if (field.label.toLowerCase().includes(lowerSearchTerm)) return true;
+        if (field.value.toLowerCase().includes(lowerSearchTerm)) return true;
+      }
+    }
+    // Legacy search for old data structure, can be removed after migration
+    // if ((p as any).ip && (p as any).ip.toLowerCase().includes(lowerSearchTerm)) return true;
+    // if ((p as any).funcao && (p as any).funcao.toLowerCase().includes(lowerSearchTerm)) return true;
+    // if ((p as any).acesso && (p as any).acesso.toLowerCase().includes(lowerSearchTerm)) return true;
+    return false;
+  });
 
   if (isLoading) {
     return (
@@ -30,14 +40,14 @@ export function PasswordList({ passwords, isLoading, onEdit, onDelete, searchTer
           <Card key={i} className="mb-4">
             <CardHeader>
               <Skeleton className="h-6 w-3/4" />
-              <Skeleton className="h-4 w-1/2 mt-1" />
             </CardHeader>
-            <CardContent className="space-y-3">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <div className="flex justify-end gap-2 mt-4">
-                <Skeleton className="h-8 w-20" />
-                <Skeleton className="h-8 w-20" />
+            <CardContent className="space-y-3 pt-2">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-2/3" />
+              <div className="flex justify-end gap-2 mt-2">
+                <Skeleton className="h-7 w-16" />
+                <Skeleton className="h-7 w-20" />
               </div>
             </CardContent>
           </Card>
