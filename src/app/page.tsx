@@ -133,7 +133,7 @@ export default function HomePage() {
               <Button onClick={() => setIsGeneratorDialogOpen(true)} variant="outline" className="hover:bg-secondary">
                 <Zap size={18} className="mr-2" /> Gerar Senha
               </Button>
-              <Button onClick={() => setIsClearAllDialogOpen(true)} variant="destructive" className="hover:bg-destructive/90">
+              <Button onClick={() => setIsClearAllDialogOpen(true)} variant="default">
                 <Trash2 size={18} className="mr-2" /> Limpar Tudo
               </Button>
             </div>
