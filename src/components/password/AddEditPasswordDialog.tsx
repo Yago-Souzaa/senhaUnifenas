@@ -2,7 +2,7 @@
 'use client';
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, useFieldArray, Controller } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import * as z from "zod";
 import type { PasswordEntry } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -29,13 +29,14 @@ import { PlusCircle, Trash2 } from "lucide-react";
 
 const customFieldSchema = z.object({
   label: z.string().min(1, { message: "Nome do campo é obrigatório." }),
-  value: z.string().min(1, { message: "Valor é obrigatório." }), // Making value optional might be better in some cases
+  value: z.string().min(1, { message: "Valor é obrigatório." }),
 });
 
 const passwordFormSchema = z.object({
   nome: z.string().min(1, { message: "Nome é obrigatório." }),
   login: z.string().min(1, { message: "Login é obrigatório." }),
   senha: z.string().optional(),
+  categoria: z.string().optional(), // Novo campo para categoria
   customFields: z.array(customFieldSchema).optional(),
 });
 
@@ -55,6 +56,7 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
       nome: "",
       login: "",
       senha: "",
+      categoria: "", // Default para categoria
       customFields: [],
     },
   });
@@ -67,27 +69,15 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
   useEffect(() => {
     if (isOpen) {
       if (initialData) {
-        // Migrate old fields (ip, funcao etc.) to customFields if they exist and are not already in customFields
         const migratedCustomFields: Array<{ label: string; value: string }> = initialData.customFields ? [...initialData.customFields] : [];
-        const oldOptionalFieldsMap: Record<string, string> = {
-          ip: "IP",
-          funcao: "Função",
-          acesso: "Acesso",
-          versao: "Versão",
-        };
+        // Lógica de migração de campos antigos para customFields (se necessário no futuro)
+        // Ex: const oldOptionalFieldsMap: Record<string, string> = { ip: "IP" };
 
-        for (const key in oldOptionalFieldsMap) {
-          // @ts-ignore
-          if (initialData[key] && !migratedCustomFields.some(cf => cf.label === oldOptionalFieldsMap[key])) {
-            // @ts-ignore
-            migratedCustomFields.push({ label: oldOptionalFieldsMap[key], value: initialData[key] });
-          }
-        }
-        
         form.reset({
           nome: initialData.nome || "",
           login: initialData.login || "",
           senha: initialData.senha || "",
+          categoria: initialData.categoria || "", // Define valor inicial da categoria
           customFields: migratedCustomFields,
         });
       } else {
@@ -95,7 +85,8 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
           nome: "",
           login: "",
           senha: "",
-          customFields: [], // Start with common fields or empty
+          categoria: "", // Reseta categoria
+          customFields: [], 
         });
       }
     }
@@ -151,6 +142,19 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
                   <FormLabel>Senha</FormLabel>
                   <FormControl>
                     <Input type="password" placeholder="Deixe em branco para não alterar (se editando)" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="categoria"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Categoria</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Ex: Servidores, Email, Redes Sociais" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

@@ -6,7 +6,7 @@ import type { PasswordEntry } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Copy, Edit2, Trash2, ShieldCheck, ShieldAlert, Info } from 'lucide-react';
+import { Eye, EyeOff, Copy, Edit2, Trash2, ShieldCheck, ShieldAlert, FolderKanban } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +19,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 
 interface PasswordListItemProps {
@@ -76,12 +77,19 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
   return (
     <Card className="mb-3 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-md">
       <CardHeader className="py-3 px-4">
-        <div className="flex justify-between items-center">
-          <CardTitle className="font-headline text-lg text-primary truncate" title={entry.nome}>{entry.nome}</CardTitle>
-          <div className="shrink-0 ml-2">
-            {strength === 'strong' && <ShieldCheck className="text-green-500" size={20} />}
-            {strength === 'medium' && <ShieldAlert className="text-yellow-500" size={20} />}
-            {strength === 'weak' && <ShieldAlert className="text-red-500" size={20} />}
+        <div className="flex justify-between items-start">
+          <div className="flex-grow min-w-0">
+            <CardTitle className="font-headline text-lg text-primary truncate" title={entry.nome}>{entry.nome}</CardTitle>
+            {entry.categoria && (
+              <Badge variant="secondary" className="mt-1 text-xs py-0.5 px-1.5">
+                <FolderKanban size={12} className="mr-1"/> {entry.categoria}
+              </Badge>
+            )}
+          </div>
+          <div className="shrink-0 ml-2 flex items-center">
+             {strength === 'strong' && <ShieldCheck className="text-green-500" size={20} />}
+             {strength === 'medium' && <ShieldAlert className="text-yellow-500" size={20} />}
+             {strength === 'weak' && <ShieldAlert className="text-red-500" size={20} />}
           </div>
         </div>
       </CardHeader>

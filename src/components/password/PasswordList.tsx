@@ -20,16 +20,13 @@ export function PasswordList({ passwords, isLoading, onEdit, onDelete, searchTer
     const lowerSearchTerm = searchTerm.toLowerCase();
     if (p.nome.toLowerCase().includes(lowerSearchTerm)) return true;
     if (p.login.toLowerCase().includes(lowerSearchTerm)) return true;
+    if (p.categoria && p.categoria.toLowerCase().includes(lowerSearchTerm)) return true; // Pesquisa na categoria
     if (p.customFields) {
       for (const field of p.customFields) {
         if (field.label.toLowerCase().includes(lowerSearchTerm)) return true;
         if (field.value.toLowerCase().includes(lowerSearchTerm)) return true;
       }
     }
-    // Legacy search for old data structure, can be removed after migration
-    // if ((p as any).ip && (p as any).ip.toLowerCase().includes(lowerSearchTerm)) return true;
-    // if ((p as any).funcao && (p as any).funcao.toLowerCase().includes(lowerSearchTerm)) return true;
-    // if ((p as any).acesso && (p as any).acesso.toLowerCase().includes(lowerSearchTerm)) return true;
     return false;
   });
 
@@ -40,6 +37,7 @@ export function PasswordList({ passwords, isLoading, onEdit, onDelete, searchTer
           <Card key={i} className="mb-4">
             <CardHeader>
               <Skeleton className="h-6 w-3/4" />
+              <Skeleton className="h-4 w-1/4 mt-1" /> 
             </CardHeader>
             <CardContent className="space-y-3 pt-2">
               <Skeleton className="h-4 w-full" />

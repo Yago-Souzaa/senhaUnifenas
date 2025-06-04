@@ -14,32 +14,19 @@ const migrateOldEntry = (entry: any): PasswordEntry => {
     nome: entry.nome,
     login: entry.login,
     senha: entry.senha,
+    categoria: entry.categoria || '', // Adiciona categoria, default para string vazia se não existir
     customFields: entry.customFields || [],
   };
 
-  const oldFieldsToMigrate: Array<{ oldKey: string; label: string }> = [
-    // @ts-ignore
-    { oldKey: 'ip', label: 'IP' },
-    // @ts-ignore
-    { oldKey: 'funcao', label: 'Função' },
-    // @ts-ignore
-    { oldKey: 'acesso', label: 'Acesso' },
-    // @ts-ignore
-    { oldKey: 'versao', label: 'Versão' },
-  ];
-
-  oldFieldsToMigrate.forEach(({ oldKey, label }) => {
-    // @ts-ignore
-    if (entry[oldKey] && !newEntry.customFields?.some(cf => cf.label === label)) {
-      // @ts-ignore
-      newEntry.customFields?.push({ label, value: entry[oldKey] });
-    }
-  });
-  // Remove old keys from the direct entry object after migration
-  // delete newEntry.ip; 
-  // delete newEntry.funcao;
-  // delete newEntry.acesso;
-  // delete newEntry.versao;
+  // Lógica de migração de campos legados para customFields (se aplicável em versões futuras)
+  // const oldFieldsToMigrate: Array<{ oldKey: string; label: string }> = [
+  //   { oldKey: 'ip', label: 'IP' },
+  // ];
+  // oldFieldsToMigrate.forEach(({ oldKey, label }) => {
+  //   if (entry[oldKey] && !newEntry.customFields?.some(cf => cf.label === label)) {
+  //     newEntry.customFields?.push({ label, value: entry[oldKey] });
+  //   }
+  // });
 
   return newEntry;
 };
@@ -56,10 +43,6 @@ export function usePasswordManager() {
         const storedPasswordsRaw = JSON.parse(storedPasswordsJson);
         const migratedPasswords = storedPasswordsRaw.map(migrateOldEntry);
         setPasswords(migratedPasswords);
-        // Optionally, re-save migrated data if structure changed significantly during migration step
-        // For this specific migration, the savePasswords in consuming components will handle it if an update occurs.
-        // However, if migration itself *must* persist, an explicit save here would be needed.
-        // localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedPasswords)); 
       }
     } catch (error) {
       console.error("Failed to load passwords from local storage:", error);
@@ -95,8 +78,11 @@ export function usePasswordManager() {
   }, [passwords, savePasswords]);
 
   const importPasswords = useCallback((entriesFromFile: Array<Omit<PasswordEntry, 'id'>>) => {
-    // The entriesFromFile already contain customFields correctly mapped by parseCSV
-    const newEntriesWithId = entriesFromFile.map(entry => ({ ...entry, id: uuidv4() }));
+    const newEntriesWithId = entriesFromFile.map(entry => ({
+        ...entry,
+        id: uuidv4(),
+        categoria: entry.categoria || '', // Garante que categoria exista
+    }));
     
     const uniqueNewEntries = newEntriesWithId.filter(newEntry => 
       !passwords.some(existing => existing.nome === newEntry.nome && existing.login === newEntry.login)
@@ -106,7 +92,7 @@ export function usePasswordManager() {
       const updatedPasswords = [...passwords, ...uniqueNewEntries];
       savePasswords(updatedPasswords);
     }
-    return uniqueNewEntries; // Return only the ones that were actually added
+    return uniqueNewEntries; 
   }, [passwords, savePasswords]);
   
   const generatePassword = useCallback((length: number, useUppercase: boolean, useLowercase: boolean, useNumbers: boolean, useSymbols: boolean): string => {
@@ -152,9 +138,8 @@ export function usePasswordManager() {
       return false;
     }
 
-    const fixedHeaders = ["nome", "login", "senha"];
+    const fixedHeaders = ["nome", "login", "senha", "categoria"]; // Adiciona categoria aqui
     
-    // Collect all unique custom field labels
     const customFieldLabels = new Set<string>();
     passwords.forEach(p => {
       p.customFields?.forEach(cf => customFieldLabels.add(cf.label));
@@ -164,12 +149,13 @@ export function usePasswordManager() {
     const allHeaders = [...fixedHeaders, ...sortedCustomFieldLabels];
     
     const csvRows = [
-      allHeaders.map(escapeCSVField).join(','), // Header row
+      allHeaders.map(escapeCSVField).join(','), 
       ...passwords.map(p => {
         const row = [
           escapeCSVField(p.nome),
           escapeCSVField(p.login),
           escapeCSVField(p.senha),
+          escapeCSVField(p.categoria), // Adiciona valor da categoria
         ];
         sortedCustomFieldLabels.forEach(label => {
           const customField = p.customFields?.find(cf => cf.label === label);

@@ -20,13 +20,12 @@ import { UploadCloud, FileText, Download, Columns } from 'lucide-react';
 interface ImportPasswordsDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onImport: (entries: Array<Omit<PasswordEntry, 'id'>>) => void; 
+  onImport: (entries: Array<Omit<PasswordEntry, 'id'>>) => Array<Omit<PasswordEntry, 'id'>>; 
 }
 
-// Basic required fields for the system to work
 const BASE_REQUIRED_HEADERS = ["nome", "login"]; 
-// Common optional fields often included in templates
-const COMMON_OPTIONAL_HEADERS = ["senha", "ip", "funcao", "acesso", "versao"];
+// Colunas comuns, agora incluindo 'categoria'
+const COMMON_OPTIONAL_HEADERS = ["senha", "categoria", "ip", "funcao", "acesso", "versao"];
 
 
 export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: ImportPasswordsDialogProps) {
@@ -44,9 +43,17 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
 
   const parseCSV = (csvText: string): Array<Omit<PasswordEntry, 'id'>> => {
     const lines = csvText.split(/\r\n|\n/).filter(line => line.trim() !== '');
-    if (lines.length < 2) { 
+    if (lines.length < 1) { // Pode ser só o cabeçalho, ou vazio
+      throw new Error("CSV vazio ou contém apenas cabeçalho.");
+    }
+    if (lines.length < 2 && lines.length > 0) { // Só cabeçalho, sem dados
+       console.warn("CSV contém apenas cabeçalho. Nenhuma senha para importar.");
+       return [];
+    }
+    if (lines.length === 0) {
       throw new Error("CSV inválido ou vazio. Precisa de cabeçalho e pelo menos uma linha de dados.");
     }
+
 
     const headerLine = lines[0];
     const headersFromFile = (headerLine.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)
@@ -60,50 +67,47 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
       throw new Error(`Cabeçalho do CSV inválido. Colunas obrigatórias ausentes: ${missingRequiredHeaders.join(', ')}. As colunas mínimas são: ${BASE_REQUIRED_HEADERS.join(', ')}.`);
     }
     
-    const headerMap: { [key: string]: number } = {}; // Maps original header name to index
+    const headerMap: { [key: string]: number } = {}; 
     headersFromFile.forEach((originalHeader, index) => {
-        headerMap[originalHeader] = index; 
+        headerMap[originalHeader.toLowerCase()] = index; // Mapeia header em minúsculo para índice
     });
 
     const entries: Array<Omit<PasswordEntry, 'id'>> = [];
-    for (let i = 1; i < lines.length; i++) {
+    for (let i = 1; i < lines.length; i++) { // Começa da segunda linha (dados)
       const values = lines[i].match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)
                              ?.map(v => v.startsWith('"') && v.endsWith('"') ? v.slice(1, -1).replace(/""/g, '"') : v.trim()) 
                              || lines[i].split(',').map(v => v.trim());
 
-      let nome: string | undefined;
-      let login: string | undefined;
-      let senha: string | undefined;
+      const entry: Partial<Omit<PasswordEntry, 'id'>> = {
+        customFields: [],
+      };
 
-      // Find 'nome' and 'login' values using case-insensitive matching for safety, but prefer direct match
-      const nomeHeaderKey = Object.keys(headerMap).find(key => key.toLowerCase() === 'nome');
-      const loginHeaderKey = Object.keys(headerMap).find(key => key.toLowerCase() === 'login');
-      const senhaHeaderKey = Object.keys(headerMap).find(key => key.toLowerCase() === 'senha');
+      // Campos principais
+      entry.nome = values[headerMap['nome']];
+      entry.login = values[headerMap['login']];
+      if (typeof headerMap['senha'] !== 'undefined') {
+        entry.senha = values[headerMap['senha']] || undefined;
+      }
+      if (typeof headerMap['categoria'] !== 'undefined') {
+        entry.categoria = values[headerMap['categoria']] || undefined;
+      }
 
-      if (nomeHeaderKey) nome = values[headerMap[nomeHeaderKey]];
-      if (loginHeaderKey) login = values[headerMap[loginHeaderKey]];
-      if (senhaHeaderKey) senha = values[headerMap[senhaHeaderKey]] || undefined;
 
-
-      if (!nome || !login) { 
+      if (!entry.nome || !entry.login) { 
         console.warn(`Linha ${i+1} ignorada: Nome ou Login ausentes.`);
         continue;
       }
 
-      const customFieldsToAdd: Array<{ label: string; value: string }> = [];
+      // Campos personalizados (todas as outras colunas)
       headersFromFile.forEach((originalHeader, index) => {
         const lowerHeader = originalHeader.toLowerCase();
-        if (!BASE_REQUIRED_HEADERS.includes(lowerHeader) && lowerHeader !== 'senha' && values[index] && values[index].trim() !== "") {
-          customFieldsToAdd.push({ label: originalHeader, value: values[index] });
+        // Adiciona como campo personalizado se não for um dos campos principais e tiver valor
+        if (![...BASE_REQUIRED_HEADERS, 'senha', 'categoria'].includes(lowerHeader) && values[index] && values[index].trim() !== "") {
+          entry.customFields?.push({ label: originalHeader, value: values[index] });
         }
       });
 
-      entries.push({
-        nome,
-        login,
-        senha,
-        customFields: customFieldsToAdd,
-      });
+      entries.push(entry as Omit<PasswordEntry, 'id'>);
     }
     return entries;
   };
@@ -119,14 +123,18 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
       const fileText = await file.text();
       const parsedEntries = parseCSV(fileText);
       
-      if (parsedEntries.length > 0) {
-        onImport(parsedEntries); // Pass parsed entries to the handler in HomePage
-        // Toasts for import success/failure are handled in HomePage's onImport handler
-        onOpenChange(false); // Close dialog
-        setFile(null); // Reset file input
-      } else {
-        toast({ title: "Nenhuma senha para importar", description: "O arquivo CSV não continha dados válidos ou todas as senhas já existem.", variant: "default" });
+      const imported = onImport(parsedEntries); 
+      if (imported.length > 0) {
+           toast({ title: "Importação Concluída", description: `${imported.length} novas senhas importadas com sucesso.` });
+      } else if (parsedEntries.length > 0 && imported.length === 0) {
+           toast({ title: "Nenhuma Nova Senha", description: "Nenhuma senha nova foi importada. Podem ser duplicatas ou o arquivo não ter dados válidos além do cabeçalho.", variant: "default" });
+      } else if (parsedEntries.length === 0) {
+           // O parseCSV já pode ter lançado um erro ou retornado um array vazio com um console.warn
+           // Se retornou array vazio e não houve erro, significa que não havia dados para importar
+           toast({ title: "Nenhuma Senha Encontrada", description: "O arquivo CSV não continha dados válidos para importar além do cabeçalho.", variant: "default"});
       }
+      onOpenChange(false); 
+      setFile(null); 
     } catch (error: any) {
       console.error("Erro ao importar CSV:", error);
       toast({ title: "Erro na Importação", description: error.message || "Falha ao processar o arquivo CSV.", variant: "destructive" });
@@ -140,10 +148,10 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
   };
 
   const handleDownloadModel = () => {
-    const exampleHeaders = [...BASE_REQUIRED_HEADERS, ...COMMON_OPTIONAL_HEADERS, "OutroCampoExemplo"];
-    const csvHeader = exampleHeaders.map(h => `"${h.replace(/"/g, '""')}"`).join(','); // Ensure headers are quoted
+    const exampleHeaders = [...BASE_REQUIRED_HEADERS, ...COMMON_OPTIONAL_HEADERS, "OutroCampoExemplo1", "OutroCampoExemplo2"];
+    const csvHeader = exampleHeaders.map(h => `"${h.replace(/"/g, '""')}"`).join(',');
 
-    const exampleRowData = ["Minha App Web", "usuario@exemplo.com", "senhaSuperSegura123", "10.0.0.5", "Servidor de Testes", "HTTPS", "v1.2", "Valor do Outro Campo"];
+    const exampleRowData = ["App Exemplo", "user@example.com", "senha#123", "Servidores", "192.168.1.10", "Servidor Web", "HTTPS", "v2.1", "Valor Exemplo 1", "Outro Valor"];
     const exampleRow = exampleRowData.map(v => `"${v.replace(/"/g, '""')}"`).join(',');
     
     const csvContent = csvHeader + '\r\n' + exampleRow;
@@ -171,7 +179,7 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
           <DialogDescription>
             Selecione um arquivo CSV. A primeira linha deve ser o cabeçalho. <br />
             Colunas obrigatórias: <code className="text-xs bg-muted p-1 rounded">{BASE_REQUIRED_HEADERS.join(', ')}</code>.<br />
-            A coluna <code className="text-xs bg-muted p-1 rounded">senha</code> é opcional. <br />
+            As colunas <code className="text-xs bg-muted p-1 rounded">senha</code> e <code className="text-xs bg-muted p-1 rounded">categoria</code> são opcionais mas recomendadas no modelo. <br />
             **Todas as outras colunas** no seu CSV (ex: ip, observacao, etc.) serão importadas como campos personalizados (o nome da coluna será o rótulo do campo).
           </DialogDescription>
         </DialogHeader>
@@ -211,4 +219,3 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
     </Dialog>
   );
 }
-
