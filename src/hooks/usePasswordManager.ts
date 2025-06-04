@@ -17,16 +17,21 @@ const migrateOldEntry = (entry: any): PasswordEntry => {
     customFields: entry.customFields || [],
   };
 
-  // Migrate old optional fields to customFields if they exist and aren't already there
-  const oldFieldsToMigrate: Array<{ oldKey: keyof PasswordEntry; label: string }> = [
+  const oldFieldsToMigrate: Array<{ oldKey: string; label: string }> = [
+    // @ts-ignore
     { oldKey: 'ip', label: 'IP' },
+    // @ts-ignore
     { oldKey: 'funcao', label: 'Função' },
+    // @ts-ignore
     { oldKey: 'acesso', label: 'Acesso' },
+    // @ts-ignore
     { oldKey: 'versao', label: 'Versão' },
   ];
 
   oldFieldsToMigrate.forEach(({ oldKey, label }) => {
+    // @ts-ignore
     if (entry[oldKey] && !newEntry.customFields?.some(cf => cf.label === label)) {
+      // @ts-ignore
       newEntry.customFields?.push({ label, value: entry[oldKey] });
     }
   });
@@ -35,7 +40,6 @@ const migrateOldEntry = (entry: any): PasswordEntry => {
   // delete newEntry.funcao;
   // delete newEntry.acesso;
   // delete newEntry.versao;
-
 
   return newEntry;
 };
@@ -50,11 +54,12 @@ export function usePasswordManager() {
       const storedPasswordsJson = localStorage.getItem(STORAGE_KEY);
       if (storedPasswordsJson) {
         const storedPasswordsRaw = JSON.parse(storedPasswordsJson);
-        // Migrate data on load
         const migratedPasswords = storedPasswordsRaw.map(migrateOldEntry);
         setPasswords(migratedPasswords);
-        // Optionally, re-save migrated data
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedPasswords));
+        // Optionally, re-save migrated data if structure changed significantly during migration step
+        // For this specific migration, the savePasswords in consuming components will handle it if an update occurs.
+        // However, if migration itself *must* persist, an explicit save here would be needed.
+        // localStorage.setItem(STORAGE_KEY, JSON.stringify(migratedPasswords)); 
       }
     } catch (error) {
       console.error("Failed to load passwords from local storage:", error);
@@ -89,16 +94,19 @@ export function usePasswordManager() {
     savePasswords(updatedPasswords);
   }, [passwords, savePasswords]);
 
-  const importPasswords = useCallback((entries: Array<Omit<PasswordEntry, 'id'>>) => {
-    const newEntriesWithId = entries.map(entry => ({ ...entry, id: uuidv4() }));
+  const importPasswords = useCallback((entriesFromFile: Array<Omit<PasswordEntry, 'id'>>) => {
+    // The entriesFromFile already contain customFields correctly mapped by parseCSV
+    const newEntriesWithId = entriesFromFile.map(entry => ({ ...entry, id: uuidv4() }));
     
     const uniqueNewEntries = newEntriesWithId.filter(newEntry => 
       !passwords.some(existing => existing.nome === newEntry.nome && existing.login === newEntry.login)
     );
     
-    const updatedPasswords = [...passwords, ...uniqueNewEntries];
-    savePasswords(updatedPasswords);
-    return uniqueNewEntries;
+    if (uniqueNewEntries.length > 0) {
+      const updatedPasswords = [...passwords, ...uniqueNewEntries];
+      savePasswords(updatedPasswords);
+    }
+    return uniqueNewEntries; // Return only the ones that were actually added
   }, [passwords, savePasswords]);
   
   const generatePassword = useCallback((length: number, useUppercase: boolean, useLowercase: boolean, useNumbers: boolean, useSymbols: boolean): string => {
@@ -130,42 +138,45 @@ export function usePasswordManager() {
 
   const escapeCSVField = (field?: string): string => {
     if (field === null || typeof field === 'undefined') {
-      return '""'; // Return empty quoted string for undefined/null
+      return '""'; 
     }
     const stringField = String(field);
     if (stringField.includes(',') || stringField.includes('\n') || stringField.includes('"')) {
       return `"${stringField.replace(/"/g, '""')}"`;
     }
-    return `"${stringField}"`; // Always wrap in quotes for consistency
-  };
-
-  const getCustomFieldValue = (fields: Array<{label: string; value: string}> | undefined, label: string): string | undefined => {
-    return fields?.find(f => f.label.toLowerCase() === label.toLowerCase())?.value;
+    return `"${stringField}"`; 
   };
   
   const exportPasswordsToCSV = useCallback(() => {
     if (passwords.length === 0) {
-      // toast({ title: "Nada para Exportar", description: "Não há senhas para exportar.", variant: "default" });
-      // This should be handled by the caller UI
       return false;
     }
 
-    // Fixed headers plus common custom fields
-    const headers = ["nome", "login", "senha", "ip", "funcao", "acesso", "versao"];
+    const fixedHeaders = ["nome", "login", "senha"];
+    
+    // Collect all unique custom field labels
+    const customFieldLabels = new Set<string>();
+    passwords.forEach(p => {
+      p.customFields?.forEach(cf => customFieldLabels.add(cf.label));
+    });
+    const sortedCustomFieldLabels = Array.from(customFieldLabels).sort();
+
+    const allHeaders = [...fixedHeaders, ...sortedCustomFieldLabels];
     
     const csvRows = [
-      headers.join(','),
-      ...passwords.map(p => 
-        [
+      allHeaders.map(escapeCSVField).join(','), // Header row
+      ...passwords.map(p => {
+        const row = [
           escapeCSVField(p.nome),
           escapeCSVField(p.login),
           escapeCSVField(p.senha),
-          escapeCSVField(getCustomFieldValue(p.customFields, "IP")),
-          escapeCSVField(getCustomFieldValue(p.customFields, "Função")),
-          escapeCSVField(getCustomFieldValue(p.customFields, "Acesso")),
-          escapeCSVField(getCustomFieldValue(p.customFields, "Versão")),
-        ].join(',')
-      )
+        ];
+        sortedCustomFieldLabels.forEach(label => {
+          const customField = p.customFields?.find(cf => cf.label === label);
+          row.push(escapeCSVField(customField?.value));
+        });
+        return row.join(',');
+      })
     ];
     const csvString = csvRows.join('\r\n');
     

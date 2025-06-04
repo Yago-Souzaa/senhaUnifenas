@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, ChangeEvent } from 'react';
-import type { PasswordEntry } from '@/types'; // Updated type
+import type { PasswordEntry } from '@/types'; 
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -20,13 +20,11 @@ import { UploadCloud, FileText, Download } from 'lucide-react';
 interface ImportPasswordsDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onImport: (entries: Array<Omit<PasswordEntry, 'id'>>) => void; // Updated prop type
+  onImport: (entries: Array<Omit<PasswordEntry, 'id'>>) => void; 
 }
 
-// Expected CSV header columns (case-insensitive for parsing, but model will be lowercase)
-const EXPECTED_HEADERS = ["nome", "login", "senha", "ip", "funcao", "acesso", "versao"];
-const REQUIRED_HEADERS = ["nome", "login"];
-
+const FIXED_IMPORT_HEADERS = ["nome", "login", "senha"]; // These are the primary fields
+const REQUIRED_HEADERS = ["nome", "login"]; // Minimum required for an entry
 
 export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: ImportPasswordsDialogProps) {
   const [file, setFile] = useState<File | null>(null);
@@ -47,26 +45,24 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
       throw new Error("CSV inválido ou vazio. Precisa de cabeçalho e pelo menos uma linha de dados.");
     }
 
-    const headerLine = lines[0].toLowerCase();
-    const headersFromFile = headerLine.split(',').map(h => h.trim());
+    const headerLine = lines[0];
+    // More robust CSV parsing for headers to handle quoted fields with commas
+    const headersFromFile = (headerLine.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)
+      ?.map(h => h.startsWith('"') && h.endsWith('"') ? h.slice(1, -1).replace(/""/g, '"') : h.trim().toLowerCase()) 
+      || headerLine.split(',').map(h => h.trim().toLowerCase()));
     
-    // Check for required headers
     const missingRequiredHeaders = REQUIRED_HEADERS.filter(expected => !headersFromFile.includes(expected));
     if (missingRequiredHeaders.length > 0) {
-      throw new Error(`Cabeçalho do CSV inválido. Colunas obrigatórias ausentes: ${missingRequiredHeaders.join(', ')}. Colunas esperadas: ${EXPECTED_HEADERS.join(', ')}.`);
+      throw new Error(`Cabeçalho do CSV inválido. Colunas obrigatórias ausentes: ${missingRequiredHeaders.join(', ')}. As colunas mínimas são: ${REQUIRED_HEADERS.join(', ')}.`);
     }
     
     const headerMap: { [key: string]: number } = {};
     headersFromFile.forEach((header, index) => {
-        if (EXPECTED_HEADERS.includes(header)) { // Only map expected headers
-            headerMap[header] = index;
-        }
+        headerMap[header] = index; 
     });
-
 
     const entries: Array<Omit<PasswordEntry, 'id'>> = [];
     for (let i = 1; i < lines.length; i++) {
-      // More robust CSV parsing to handle quoted fields with commas
       const values = lines[i].match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)
                              ?.map(v => v.startsWith('"') && v.endsWith('"') ? v.slice(1, -1).replace(/""/g, '"') : v.trim()) 
                              || lines[i].split(',').map(v => v.trim());
@@ -80,18 +76,16 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
       }
 
       const customFieldsToAdd: Array<{ label: string; value: string }> = [];
-      const optionalFieldsMap: Record<string, string> = {
-        ip: "IP",
-        funcao: "Função",
-        acesso: "Acesso",
-        versao: "Versão",
-      };
-
-      for (const key in optionalFieldsMap) {
-        if (headerMap[key] !== undefined && values[headerMap[key]]) {
-          customFieldsToAdd.push({ label: optionalFieldsMap[key], value: values[headerMap[key]] });
+      headersFromFile.forEach((header, index) => {
+        if (!FIXED_IMPORT_HEADERS.includes(header) && values[index] && values[index].trim() !== "") {
+          // Treat any other header as a custom field label
+          // The actual header name from file (before toLowerCase) should be used as label for fidelity
+          const originalHeader = (headerLine.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) 
+                                ?.map(h => h.startsWith('"') && h.endsWith('"') ? h.slice(1,-1).replace(/""/g, '"') : h.trim())
+                                || headerLine.split(',').map(h => h.trim()))[index];
+          customFieldsToAdd.push({ label: originalHeader, value: values[index] });
         }
-      }
+      });
 
       entries.push({
         nome,
@@ -113,13 +107,18 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
     try {
       const fileText = await file.text();
       const parsedEntries = parseCSV(fileText);
+      
       if (parsedEntries.length > 0) {
-        onImport(parsedEntries);
-        // toast is handled by parent component now
+        const imported = onImport(parsedEntries); // onImport now returns the count of actually new entries
+        if (imported.length > 0) {
+          toast({ title: "Importação Concluída", description: `${imported.length} novas senhas importadas com sucesso.` });
+        } else {
+          toast({ title: "Nenhuma Nova Senha", description: "Nenhuma senha nova foi importada. Podem ser duplicatas ou o arquivo não ter dados válidos além do cabeçalho.", variant: "default" });
+        }
         onOpenChange(false);
         setFile(null); 
       } else {
-        toast({ title: "Nenhuma senha para importar", description: "O arquivo CSV não continha dados válidos ou todas as senhas já existem.", variant: "destructive" });
+        toast({ title: "Nenhuma senha para importar", description: "O arquivo CSV não continha dados válidos ou todas as senhas já existem.", variant: "default" });
       }
     } catch (error: any) {
       console.error("Erro ao importar CSV:", error);
@@ -134,8 +133,12 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
   };
 
   const handleDownloadModel = () => {
-    const csvHeader = EXPECTED_HEADERS.join(',');
-    const blob = new Blob([csvHeader], { type: 'text/csv;charset=utf-8;' });
+    // Model provides basic fields; users can add more columns for custom fields.
+    const csvHeader = FIXED_IMPORT_HEADERS.join(',') + ",ExemploCampoPersonalizado1,ExemploCampoPersonalizado2";
+    const exampleRow = '"Nome Exemplo","login.exemplo","senhaExemplo","Valor Exemplo 1","Valor Exemplo 2"';
+    const csvContent = csvHeader + '\r\n' + exampleRow;
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement("a");
     if (link.download !== undefined) {
         const url = URL.createObjectURL(blob);
@@ -150,17 +153,16 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
     }
   };
 
-
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { onOpenChange(open); if (!open) setFile(null); }}>
-      <DialogContent className="sm:max-w-[480px] bg-card">
+      <DialogContent className="sm:max-w-md md:max-w-lg bg-card">
         <DialogHeader>
           <DialogTitle className="font-headline text-primary">Importar Senhas de CSV</DialogTitle>
           <DialogDescription>
             Selecione um arquivo CSV. A primeira linha deve ser o cabeçalho. <br />
             Colunas obrigatórias: <code className="text-xs bg-muted p-1 rounded">{REQUIRED_HEADERS.join(', ')}</code>.<br />
-            Colunas opcionais reconhecidas: <code className="text-xs bg-muted p-1 rounded">{EXPECTED_HEADERS.filter(h => !REQUIRED_HEADERS.includes(h)).join(', ')}</code>.<br />
-            Estas colunas opcionais serão adicionadas como campos personalizados.
+            A coluna <code className="text-xs bg-muted p-1 rounded">senha</code> é opcional. <br />
+            **Todas as outras colunas** no seu CSV serão importadas como campos personalizados (o nome da coluna será o rótulo do campo).
           </DialogDescription>
         </DialogHeader>
         <div className="py-4 space-y-4">
@@ -179,7 +181,7 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
                  <p className="text-xs text-muted-foreground">Arquivo selecionado: {file.name}</p>
             )}
             <Button variant="ghost" onClick={handleDownloadModel} className="w-full justify-start text-left text-sm text-accent hover:text-accent/90">
-                <Download className="mr-2 h-4 w-4" /> Baixar Modelo CSV
+                <Download className="mr-2 h-4 w-4" /> Baixar Modelo CSV (com exemplos)
             </Button>
         </div>
         <DialogFooter>
@@ -199,4 +201,3 @@ export function ImportPasswordsDialog({ isOpen, onOpenChange, onImport }: Import
     </Dialog>
   );
 }
-
