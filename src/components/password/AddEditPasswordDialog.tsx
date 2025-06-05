@@ -46,7 +46,10 @@ const passwordFormSchema = z.object({
   nome: z.string().min(1, { message: "Nome é obrigatório." }),
   login: z.string().min(1, { message: "Login é obrigatório." }),
   senha: z.string().optional(),
-  categoria: z.string().optional(), // This will hold the actual category string or NO_CATEGORY_VALUE
+  categoria: z.string({required_error: "Por favor, selecione uma categoria."}) // Tornando obrigatório
+    .refine(val => val !== NO_CATEGORY_VALUE, {
+      message: "Por favor, selecione uma categoria válida. Não é permitido salvar senhas sem categoria.",
+    }),
   customFields: z.array(customFieldSchema).optional(),
 });
 
@@ -55,7 +58,7 @@ export type PasswordFormValues = z.infer<typeof passwordFormSchema>;
 interface AddEditPasswordDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: PasswordFormValues, id?: string) => void; // Data here should have category as "" if it was NO_CATEGORY_VALUE
+  onSubmit: (data: PasswordFormValues, id?: string) => void;
   initialData?: PasswordEntry | Partial<PasswordEntry> | null;
   userCategories: string[];
 }
@@ -73,11 +76,9 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
 
   useEffect(() => {
     if (isOpen) {
-      // If initialData.categoria is empty or undefined, map to NO_CATEGORY_VALUE for the Select.
-      // Otherwise, use the actual category string.
       const effectiveCategory = (initialData?.categoria === "" || initialData?.categoria === undefined)
         ? NO_CATEGORY_VALUE
-        : initialData.categoria;
+        : initialData.categoria || NO_CATEGORY_VALUE; // Garante que NO_CATEGORY_VALUE seja usado se initialData.categoria for falsy mas não ""
 
       form.reset({
         nome: initialData?.nome || "",
@@ -90,27 +91,29 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
   }, [initialData, form, isOpen]);
 
   const handleSubmit = (data: PasswordFormValues) => {
-    // Map NO_CATEGORY_VALUE back to an empty string for storage/API consistency
+    // A validação do schema já garantiu que data.categoria não é NO_CATEGORY_VALUE.
+    // A transformação abaixo é para garantir consistência caso o schema mude no futuro
+    // ou para cenários onde a categoria pudesse ser "" por outras vias.
+    // No entanto, com o .refine atual, data.categoria sempre será uma categoria válida aqui.
     const submissionData = {
       ...data,
+      // Se data.categoria fosse NO_CATEGORY_VALUE (o que o refine impede), viraria "".
+      // Como o refine impede, data.categoria já é a categoria correta.
       categoria: data.categoria === NO_CATEGORY_VALUE ? "" : data.categoria,
     };
-    // The onSubmit prop expects the original PasswordFormValues type,
-    // but with the category field conceptually being an empty string if it was NO_CATEGORY_VALUE.
-    // We pass the transformed submissionData.
     onSubmit(submissionData as PasswordFormValues, initialData?.id as string | undefined);
-    onOpenChange(false); // Close dialog on submit
+    onOpenChange(false);
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
       onOpenChange(open);
       if (!open) {
-        form.reset({ // Reset form on close to clear fields for next open
+        form.reset({ 
             nome: "",
             login: "",
             senha: "",
-            categoria: NO_CATEGORY_VALUE,
+            categoria: NO_CATEGORY_VALUE, // Reset para "Sem Categoria" para limpar estado de validação
             customFields: [],
         });
       }
@@ -168,10 +171,10 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
               name="categoria"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Categoria</FormLabel>
+                  <FormLabel>Categoria <span className="text-destructive">*</span></FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    value={field.value || NO_CATEGORY_VALUE} // Ensure value is not undefined for Select
+                    value={field.value || NO_CATEGORY_VALUE} 
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -179,9 +182,8 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value={NO_CATEGORY_VALUE}>Sem Categoria</SelectItem>
+                      <SelectItem value={NO_CATEGORY_VALUE}>Sem Categoria (selecione uma válida)</SelectItem>
                       {userCategories.map((cat) => (
-                        // Ensure userCategories don't contain empty strings or the NO_CATEGORY_VALUE
                         cat && cat !== NO_CATEGORY_VALUE && (
                             <SelectItem key={cat} value={cat}>
                             {cat}
