@@ -68,7 +68,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
                   onClick={() => handleCopy(entry.nome, "Nome", `nome-${entry.id}`)}
                   className={cn(
                     "h-6 w-6 shrink-0 transition-transform duration-150",
-                    copiedField === `nome-${entry.id}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                    copiedField === `nome-${entry.id}` ? 'scale-110 bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
                   )}
                   aria-label="Copiar Nome"
                 >
@@ -88,7 +88,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
                 onClick={() => handleCopy(entry.categoria, "Categoria", `categoria-${entry.id}`)}
                 className={cn(
                   "h-5 w-5 ml-1 shrink-0 transition-transform duration-150",
-                  copiedField === `categoria-${entry.id}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                  copiedField === `categoria-${entry.id}` ? 'scale-110 bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
                 )}
                 aria-label="Copiar Categoria"
               >
@@ -136,7 +136,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
               onClick={() => handleCopy(entry.login, "Login", `login-${entry.id}`)}
               className={cn(
                 "h-7 w-7 ml-1 shrink-0 transition-transform duration-150",
-                copiedField === `login-${entry.id}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                copiedField === `login-${entry.id}` ? 'scale-110 bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
               aria-label="Copiar Login"
             >
@@ -163,7 +163,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
               onClick={() => handleCopy(entry.senha, "Senha", `senha-${entry.id}`)}
               className={cn(
                 "h-7 w-7 ml-1 shrink-0 transition-transform duration-150",
-                copiedField === `senha-${entry.id}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                copiedField === `senha-${entry.id}` ? 'scale-110 bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
               aria-label="Copiar Senha"
             >
@@ -183,7 +183,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
                       onClick={() => handleCopy(field.value, `Valor de "${field.label}"`, `customFieldValue-${entry.id}-${index}`)}
                       className={cn(
                         "h-6 w-6 shrink-0 transition-transform duration-150",
-                        copiedField === `customFieldValue-${entry.id}-${index}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+                        copiedField === `customFieldValue-${entry.id}-${index}` ? 'scale-110 bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
                       )}
                       aria-label={`Copiar valor do campo ${field.label}`}
                     >
