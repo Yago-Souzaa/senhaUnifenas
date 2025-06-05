@@ -99,9 +99,9 @@ export default function HomePage() {
         if (storedCategories) {
           setUserCategories(JSON.parse(storedCategories));
         } else {
-          setUserCategories([]); 
+          setUserCategories([]);
         }
-        setActiveTab('Todas'); 
+        setActiveTab('Todas');
       } else {
         setUserCategories([]);
         setActiveTab('Todas');
@@ -113,16 +113,18 @@ export default function HomePage() {
   useEffect(() => {
     if (firebaseUser && passwords.length > 0) {
       const categoriesFromPasswords = Array.from(new Set(passwords.map(p => p.categoria).filter(Boolean) as string[]));
+
+      const currentCategories = JSON.parse(localStorage.getItem(`userCategories_${firebaseUser.uid}`) || '[]');
       
-      const combinedCategories = Array.from(new Set([...userCategories, ...categoriesFromPasswords]
+      const combinedCategories = Array.from(new Set([...currentCategories, ...categoriesFromPasswords]
         .map(cat => cat.trim())
         .filter(cat => cat.length > 0)
         .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
       ));
       
-      if (JSON.stringify(combinedCategories) !== JSON.stringify(userCategories) && (categoriesFromPasswords.length > 0 || userCategories.length === 0) ) {
-        setUserCategories(combinedCategories);
-        localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(combinedCategories));
+      if (JSON.stringify(combinedCategories) !== JSON.stringify(userCategories)) {
+         setUserCategories(combinedCategories);
+         localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(combinedCategories));
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -252,7 +254,7 @@ export default function HomePage() {
   };
 
   const handleSubmitPasswordForm = async (data: PasswordFormValues, id?: string) => {
-    if (id && 'id' in (editingPassword || {})) { 
+    if (id && 'id' in (editingPassword || {})) {
       await handleUpdatePassword(data, id);
     } else {
       await handleAddPassword(data);
@@ -340,7 +342,7 @@ export default function HomePage() {
     if (activeTab !== 'Todas') {
       initialCategory = activeTab;
     }
-    setEditingPassword({ categoria: initialCategory }); 
+    setEditingPassword({ categoria: initialCategory });
     setIsAddEditDialogOpen(true);
   };
 
@@ -359,9 +361,9 @@ export default function HomePage() {
     setUserCategories(updatedCategories);
     localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(updatedCategories));
     setActiveTab(trimmedName);
-    setNewCategoryName(''); 
+    setNewCategoryName('');
     toast({title: "Categoria Adicionada", description: `Categoria "${trimmedName}" criada.`});
-    return true; 
+    return true;
   }, [newCategoryName, userCategories, firebaseUser, toast]);
 
   const handleConfirmDeleteCategory = useCallback(() => {
@@ -373,7 +375,7 @@ export default function HomePage() {
       const updatedCategories = userCategories.filter(cat => cat.toLowerCase() !== categoryToDelete.toLowerCase());
       setUserCategories(updatedCategories);
       localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(updatedCategories));
-      setActiveTab('Todas'); 
+      setActiveTab('Todas');
       toast({ title: "Categoria Excluída", description: `A categoria "${categoryToDelete}" foi excluída.` });
     } else {
       toast({
@@ -567,21 +569,35 @@ export default function HomePage() {
                           </TabsTrigger>
                           {userCategories.map(category => (
                             <TabsTrigger key={category} value={category} className="relative group pr-7 py-1.5">
-                              <FolderKanban size={14} className="mr-1.5" /> 
+                              <FolderKanban size={14} className="mr-1.5" />
                               {category}
                               <Button
+                                asChild
                                 variant="ghost"
                                 size="icon"
                                 className="absolute top-1/2 right-0.5 -translate-y-1/2 h-5 w-5 opacity-0 group-hover:opacity-100 hover:bg-destructive/20"
-                                onClick={(e) => {
-                                  e.stopPropagation(); 
-                                  e.preventDefault(); 
-                                  setCategoryToDelete(category);
-                                  setIsDeleteCategoryDialogOpen(true);
-                                }}
                                 title={`Excluir categoria ${category}`}
                               >
-                                <X size={12} className="text-destructive/80 hover:text-destructive" />
+                                <div
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    setCategoryToDelete(category);
+                                    setIsDeleteCategoryDialogOpen(true);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.stopPropagation();
+                                      e.preventDefault();
+                                      setCategoryToDelete(category);
+                                      setIsDeleteCategoryDialogOpen(true);
+                                    }
+                                  }}
+                                >
+                                  <X size={12} className="text-destructive/80 hover:text-destructive" />
+                                </div>
                               </Button>
                             </TabsTrigger>
                           ))}
@@ -627,7 +643,7 @@ export default function HomePage() {
                       </AlertDialogContent>
                     </AlertDialog>
                 </div>
-                
+
                  <TabsContent key="content-todas" value="Todas" className="mt-4">
                      <PasswordList
                         passwords={filteredPasswords}
@@ -638,11 +654,11 @@ export default function HomePage() {
                         activeTab={activeTab}
                     />
                 </TabsContent>
-                
+
                  {userCategories.map(category => (
                     <TabsContent key={`content-${category}`} value={category} className="mt-4">
                          <PasswordList
-                            passwords={filteredPasswords} 
+                            passwords={filteredPasswords}
                             isLoading={passwordsLoading}
                             onEdit={handleEditPassword}
                             onDelete={handleDeletePassword}
@@ -664,7 +680,7 @@ export default function HomePage() {
           if (!open) setEditingPassword(null);
         }}
         onSubmit={handleSubmitPasswordForm}
-        initialData={editingPassword as PasswordEntry | null} 
+        initialData={editingPassword as PasswordEntry | null}
       />
       <ImportPasswordsDialog
         isOpen={isImportDialogOpen}
@@ -705,4 +721,3 @@ export default function HomePage() {
     </div>
   );
 }
-    
