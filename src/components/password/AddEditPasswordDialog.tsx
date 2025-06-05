@@ -34,6 +34,9 @@ import {
 import { useEffect } from "react";
 import { PlusCircle, Trash2 } from "lucide-react";
 
+// Special value for the "No Category" option to avoid empty string in SelectItem value
+const NO_CATEGORY_VALUE = "__NO_CATEGORY_INTERNAL__";
+
 const customFieldSchema = z.object({
   label: z.string().min(1, { message: "Nome do campo é obrigatório." }),
   value: z.string().min(1, { message: "Valor é obrigatório." }),
@@ -43,7 +46,7 @@ const passwordFormSchema = z.object({
   nome: z.string().min(1, { message: "Nome é obrigatório." }),
   login: z.string().min(1, { message: "Login é obrigatório." }),
   senha: z.string().optional(),
-  categoria: z.string().optional(),
+  categoria: z.string().optional(), // This will hold the actual category string or NO_CATEGORY_VALUE
   customFields: z.array(customFieldSchema).optional(),
 });
 
@@ -52,7 +55,7 @@ export type PasswordFormValues = z.infer<typeof passwordFormSchema>;
 interface AddEditPasswordDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: PasswordFormValues, id?: string) => void;
+  onSubmit: (data: PasswordFormValues, id?: string) => void; // Data here should have category as "" if it was NO_CATEGORY_VALUE
   initialData?: PasswordEntry | Partial<PasswordEntry> | null;
   userCategories: string[];
 }
@@ -60,13 +63,7 @@ interface AddEditPasswordDialogProps {
 export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialData, userCategories }: AddEditPasswordDialogProps) {
   const form = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordFormSchema),
-    defaultValues: {
-      nome: "",
-      login: "",
-      senha: "",
-      categoria: "",
-      customFields: [],
-    },
+    // Default values are set/updated in useEffect based on initialData and isOpen
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -76,23 +73,48 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
 
   useEffect(() => {
     if (isOpen) {
+      // If initialData.categoria is empty or undefined, map to NO_CATEGORY_VALUE for the Select.
+      // Otherwise, use the actual category string.
+      const effectiveCategory = (initialData?.categoria === "" || initialData?.categoria === undefined)
+        ? NO_CATEGORY_VALUE
+        : initialData.categoria;
+
       form.reset({
         nome: initialData?.nome || "",
         login: initialData?.login || "",
         senha: initialData?.senha || "",
-        categoria: initialData?.categoria || "",
+        categoria: effectiveCategory,
         customFields: initialData?.customFields || [],
       });
     }
   }, [initialData, form, isOpen]);
 
   const handleSubmit = (data: PasswordFormValues) => {
-    onSubmit(data, initialData?.id as string | undefined);
-    onOpenChange(false);
+    // Map NO_CATEGORY_VALUE back to an empty string for storage/API consistency
+    const submissionData = {
+      ...data,
+      categoria: data.categoria === NO_CATEGORY_VALUE ? "" : data.categoria,
+    };
+    // The onSubmit prop expects the original PasswordFormValues type,
+    // but with the category field conceptually being an empty string if it was NO_CATEGORY_VALUE.
+    // We pass the transformed submissionData.
+    onSubmit(submissionData as PasswordFormValues, initialData?.id as string | undefined);
+    onOpenChange(false); // Close dialog on submit
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      onOpenChange(open);
+      if (!open) {
+        form.reset({ // Reset form on close to clear fields for next open
+            nome: "",
+            login: "",
+            senha: "",
+            categoria: NO_CATEGORY_VALUE,
+            customFields: [],
+        });
+      }
+    }}>
       <DialogContent className="sm:max-w-md md:max-w-lg bg-card max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="font-headline text-primary">{initialData?.id ? "Editar Senha" : "Adicionar Nova Senha"}</DialogTitle>
@@ -147,18 +169,24 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Categoria</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select
+                    onValueChange={field.onChange}
+                    value={field.value || NO_CATEGORY_VALUE} // Ensure value is not undefined for Select
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione uma categoria" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value="">Sem Categoria</SelectItem>
+                      <SelectItem value={NO_CATEGORY_VALUE}>Sem Categoria</SelectItem>
                       {userCategories.map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
-                        </SelectItem>
+                        // Ensure userCategories don't contain empty strings or the NO_CATEGORY_VALUE
+                        cat && cat !== NO_CATEGORY_VALUE && (
+                            <SelectItem key={cat} value={cat}>
+                            {cat}
+                            </SelectItem>
+                        )
                       ))}
                     </SelectContent>
                   </Select>
@@ -226,4 +254,5 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
     </Dialog>
   );
 }
-
+    
+    
