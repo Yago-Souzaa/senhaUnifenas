@@ -76,35 +76,37 @@ export default function HomePage() {
 
   const handleFirebaseError = (error: AuthError) => {
     console.error("Firebase Auth Error:", error);
+    let errorMessage = "Ocorreu um erro de autenticação.";
     switch (error.code) {
       case 'auth/invalid-email':
-        setAuthError("Formato de email inválido.");
+        errorMessage = "Formato de email inválido.";
         break;
       case 'auth/user-disabled':
-        setAuthError("Esta conta de usuário foi desabilitada.");
+        errorMessage = "Esta conta de usuário foi desabilitada.";
         break;
       case 'auth/user-not-found':
-        setAuthError("Nenhum usuário encontrado com este email.");
+        errorMessage = "Nenhum usuário encontrado com este email.";
         break;
       case 'auth/wrong-password':
-        setAuthError("Senha incorreta.");
+        errorMessage = "Senha incorreta.";
         break;
       case 'auth/email-already-in-use':
-        setAuthError("Este email já está em uso por outra conta.");
+        errorMessage = "Este email já está em uso por outra conta.";
         break;
       case 'auth/weak-password':
-        setAuthError("A senha é muito fraca. Use pelo menos 6 caracteres.");
+        errorMessage = "A senha é muito fraca. Use pelo menos 6 caracteres.";
         break;
       case 'auth/operation-not-allowed':
-         setAuthError("Operação não permitida. Login por email/senha pode estar desabilitado.");
+         errorMessage = "Operação não permitida. Login por email/senha pode estar desabilitado.";
          break;
       case 'auth/too-many-requests':
-        setAuthError("Muitas tentativas de login falharam. Tente novamente mais tarde.");
+        errorMessage = "Muitas tentativas de login falharam. Tente novamente mais tarde.";
         break;
       default:
-        setAuthError(error.message || "Ocorreu um erro de autenticação.");
+        errorMessage = error.message || "Ocorreu um erro de autenticação desconhecido.";
     }
-    toast({ title: "Erro de Autenticação", description: authError || error.message, variant: "destructive"});
+    setAuthError(errorMessage);
+    toast({ title: "Erro de Autenticação", description: errorMessage, variant: "destructive"});
   };
 
   const handleRegisterWithEmail = async (e: FormEvent) => {
@@ -112,6 +114,7 @@ export default function HomePage() {
     setAuthError(null);
     if (!email || !password) {
       setAuthError("Email e senha são obrigatórios.");
+      toast({ title: "Campos Vazios", description: "Email e senha são obrigatórios.", variant: "destructive" });
       return;
     }
     try {
@@ -128,6 +131,7 @@ export default function HomePage() {
     setAuthError(null);
     if (!email || !password) {
       setAuthError("Email e senha são obrigatórios.");
+      toast({ title: "Campos Vazios", description: "Email e senha são obrigatórios.", variant: "destructive" });
       return;
     }
     try {
@@ -166,7 +170,7 @@ export default function HomePage() {
       await addPassword(entryToAdd);
       toast({ title: "Sucesso!", description: `Senha para "${data.nome}" adicionada.` });
     } catch (e: any) {
-      toast({ title: "Erro ao Adicionar", description: e.message || "Não foi possível adicionar a senha.", variant: "destructive" });
+      toast({ title: "Erro ao Adicionar", description: (e as Error).message || "Não foi possível adicionar a senha.", variant: "destructive" });
     }
   };
 
@@ -188,7 +192,7 @@ export default function HomePage() {
       await updatePassword(entryToUpdate);
       toast({ title: "Sucesso!", description: `Senha para "${data.nome}" atualizada.` });
     } catch (e: any) {
-      toast({ title: "Erro ao Atualizar", description: e.message || "Não foi possível atualizar a senha.", variant: "destructive" });
+      toast({ title: "Erro ao Atualizar", description: (e as Error).message || "Não foi possível atualizar a senha.", variant: "destructive" });
     }
   };
 
@@ -219,7 +223,7 @@ export default function HomePage() {
         toast({ title: "Sucesso!", description: `Senha para "${entryToDelete.nome}" deletada.`, variant: "destructive" });
       }
     } catch (e: any) {
-      toast({ title: "Erro ao Deletar", description: e.message || "Não foi possível deletar a senha.", variant: "destructive" });
+      toast({ title: "Erro ao Deletar", description: (e as Error).message || "Não foi possível deletar a senha.", variant: "destructive" });
     }
   };
 
@@ -241,7 +245,7 @@ export default function HomePage() {
       }
       setIsImportDialogOpen(false);
     } catch (e: any) {
-         toast({ title: "Erro na Importação", description: e.message || "Falha ao processar o arquivo CSV.", variant: "destructive" });
+         toast({ title: "Erro na Importação", description: (e as Error).message || "Falha ao processar o arquivo CSV.", variant: "destructive" });
     }
   };
   
@@ -254,7 +258,8 @@ export default function HomePage() {
       await clearAllPasswords();
       toast({ title: "Tudo Limpo!", description: "Todas as senhas foram removidas.", variant: "destructive" });
       setIsClearAllDialogOpen(false);
-    } catch (e: any)      toast({ title: "Erro ao Limpar", description: e.message || "Não foi possível limpar todas as senhas.", variant: "destructive" });
+    } catch (e: any) { // Corrected line
+      toast({ title: "Erro ao Limpar", description: (e as Error).message || "Não foi possível limpar todas as senhas.", variant: "destructive" });
     }
   };
 
