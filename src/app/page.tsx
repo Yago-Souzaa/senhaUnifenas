@@ -48,7 +48,6 @@ import {
   type AuthError
 } from 'firebase/auth';
 
-const ADD_CATEGORY_TAB_VALUE = "___add_new_category___";
 
 export default function HomePage() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -124,7 +123,9 @@ export default function HomePage() {
       ));
 
       // Only update if there's a change to avoid infinite loops
-      if (JSON.stringify(combinedCategories) !== JSON.stringify(userCategories)) {
+      // and also ensure that userCategories is not empty before comparing
+      // an empty passwords category list with an existing userCategories list from localstorage
+      if (JSON.stringify(combinedCategories) !== JSON.stringify(userCategories) && (categoriesFromPasswords.length > 0 || userCategories.length === 0) ) {
         setUserCategories(combinedCategories);
         localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(combinedCategories));
       }
@@ -341,7 +342,7 @@ export default function HomePage() {
 
   const handleOpenAddPasswordDialog = () => {
     let initialCategory = "";
-    if (activeTab !== 'Todas' && activeTab !== ADD_CATEGORY_TAB_VALUE) {
+    if (activeTab !== 'Todas') {
       initialCategory = activeTab;
     }
     setEditingPassword({ categoria: initialCategory }); // Pass partial data for new entry
@@ -372,7 +373,7 @@ export default function HomePage() {
   const filteredPasswords = useMemo(() => {
     let tempPasswords = passwords;
 
-    if (activeTab !== 'Todas' && activeTab !== ADD_CATEGORY_TAB_VALUE) {
+    if (activeTab !== 'Todas') {
       tempPasswords = tempPasswords.filter(p => p.categoria?.toLowerCase() === activeTab.toLowerCase());
     }
 
@@ -594,21 +595,24 @@ export default function HomePage() {
                       </AlertDialogContent>
                     </AlertDialog>
                 </div>
-                <TabsContent value={activeTab} className="mt-4">
-                   <PasswordList
-                    passwords={filteredPasswords}
-                    isLoading={passwordsLoading}
-                    onEdit={handleEditPassword}
-                    onDelete={handleDeletePassword}
-                    searchTerm={searchTerm}
-                    activeTab={activeTab}
-                  />
+
+                 {/* Render a TabsContent for "Todas" */}
+                 <TabsContent key="content-todas" value="Todas" className="mt-4">
+                     <PasswordList
+                        passwords={filteredPasswords}
+                        isLoading={passwordsLoading}
+                        onEdit={handleEditPassword}
+                        onDelete={handleDeletePassword}
+                        searchTerm={searchTerm}
+                        activeTab={activeTab}
+                    />
                 </TabsContent>
-                 {/* Render a TabsContent for each category to ensure structure, even if empty, or rely on activeTab for filtering */}
+                
+                {/* Render a TabsContent for each category */}
                  {userCategories.map(category => (
                     <TabsContent key={`content-${category}`} value={category} className="mt-4">
                          <PasswordList
-                            passwords={filteredPasswords} // filteredPasswords already considers activeTab
+                            passwords={filteredPasswords} 
                             isLoading={passwordsLoading}
                             onEdit={handleEditPassword}
                             onDelete={handleDeletePassword}
@@ -617,16 +621,6 @@ export default function HomePage() {
                         />
                     </TabsContent>
                 ))}
-                 <TabsContent key="content-todas" value="Todas" className="mt-4">
-                     <PasswordList
-                        passwords={filteredPasswords} // filteredPasswords already considers activeTab (="Todas" means no category filter)
-                        isLoading={passwordsLoading}
-                        onEdit={handleEditPassword}
-                        onDelete={handleDeletePassword}
-                        searchTerm={searchTerm}
-                        activeTab={activeTab}
-                    />
-                </TabsContent>
               </Tabs>
             </div>
           </>
