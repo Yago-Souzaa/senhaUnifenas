@@ -16,8 +16,15 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, XCircle, UserPlus, LogIn, KeyRound } from 'lucide-react';
+import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, XCircle, UserPlus, LogIn, KeyRound, EllipsisVertical } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 import { auth } from '@/lib/firebase'; // Import Firebase auth instance
 import { 
@@ -90,7 +97,7 @@ export default function HomePage() {
       case 'auth/wrong-password':
         errorMessage = "Senha incorreta.";
         break;
-      case 'auth/invalid-credential': // Added specific case
+      case 'auth/invalid-credential': 
         errorMessage = "Email ou senha inválidos. Verifique os dados e tente novamente.";
         break;
       case 'auth/email-already-in-use':
@@ -396,18 +403,32 @@ export default function HomePage() {
                   <Button onClick={() => { setEditingPassword(null); setIsAddEditDialogOpen(true); }} className="bg-primary hover:bg-primary/90">
                     <PlusCircle size={18} className="mr-2" /> Adicionar Nova
                   </Button>
-                  <Button onClick={() => setIsImportDialogOpen(true)} variant="outline" className="hover:bg-secondary">
-                    <Upload size={18} className="mr-2" /> Importar CSV
-                  </Button>
-                  <Button onClick={handleExportPasswords} variant="outline" className="hover:bg-secondary">
-                    <FileDown size={18} className="mr-2" /> Exportar CSV
-                  </Button>
-                  <Button onClick={() => setIsGeneratorDialogOpen(true)} variant="outline" className="hover:bg-secondary">
-                    <Zap size={18} className="mr-2" /> Gerar Senha
-                  </Button>
-                  <Button onClick={() => setIsClearAllDialogOpen(true)} variant="default" className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-                    <Trash2 size={18} className="mr-2" /> Limpar Tudo
-                  </Button>
+                  
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="hover:bg-secondary">
+                        <EllipsisVertical size={18} className="mr-0 md:mr-2" /> <span className="hidden md:inline">Mais Ações</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => setIsImportDialogOpen(true)}>
+                        <Upload size={16} className="mr-2" /> Importar CSV
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={handleExportPasswords}>
+                        <FileDown size={16} className="mr-2" /> Exportar CSV
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setIsGeneratorDialogOpen(true)}>
+                        <Zap size={16} className="mr-2" /> Gerar Senha
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem 
+                        onSelect={() => setIsClearAllDialogOpen(true)} 
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                      >
+                        <Trash2 size={16} className="mr-2" /> Limpar Tudo
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             </div>
@@ -453,5 +474,6 @@ export default function HomePage() {
     </div>
   );
 }
+    
 
     
