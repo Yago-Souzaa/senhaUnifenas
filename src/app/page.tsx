@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, FormEvent, useMemo, useCallback } from 'react';
 import { usePasswordManager } from '@/hooks/usePasswordManager';
 import type { PasswordEntry, FirebaseUser } from '@/types';
 import { Header } from '@/components/layout/Header';
@@ -16,70 +16,115 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, XCircle, UserPlus, LogIn, KeyRound, EllipsisVertical } from 'lucide-react';
+import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, XCircle, UserPlus, LogIn, KeyRound, EllipsisVertical, FolderKanban, Plus } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
-import { auth } from '@/lib/firebase'; // Import Firebase auth instance
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut, 
+
+import { auth } from '@/lib/firebase';
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
   onAuthStateChanged,
   type AuthError
 } from 'firebase/auth';
 
+const ADD_CATEGORY_TAB_VALUE = "___add_new_category___";
+
 export default function HomePage() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [authLoading, setAuthLoading] = useState(true); // For initial auth state check
+  const [authLoading, setAuthLoading] = useState(true);
 
-  // States for auth forms
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
-  const { 
-    passwords, 
-    isLoading: passwordsLoading, 
+  const {
+    passwords,
+    isLoading: passwordsLoading,
     error: passwordManagerError,
-    addPassword, 
-    updatePassword, 
-    deletePassword, 
-    importPasswords: importPasswordsHook, 
+    addPassword,
+    updatePassword,
+    deletePassword,
+    importPasswords: importPasswordsHook,
     generatePassword,
     clearAllPasswords,
     exportPasswordsToCSV,
-  } = usePasswordManager(firebaseUser?.uid); 
+  } = usePasswordManager(firebaseUser?.uid);
   const { toast } = useToast();
 
   const [isAddEditDialogOpen, setIsAddEditDialogOpen] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [isGeneratorDialogOpen, setIsGeneratorDialogOpen] = useState(false);
   const [isClearAllDialogOpen, setIsClearAllDialogOpen] = useState(false);
-  const [editingPassword, setEditingPassword] = useState<PasswordEntry | null>(null);
+  const [editingPassword, setEditingPassword] = useState<PasswordEntry | Partial<PasswordEntry> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [showSecurityNotice, setShowSecurityNotice] = useState(true);
 
-  // Firebase Auth state listener
+  const [userCategories, setUserCategories] = useState<string[]>([]);
+  const [activeTab, setActiveTab] = useState<string>('Todas');
+  const [isAddCategoryDialogOpen, setIsAddCategoryDialogOpen] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
       setAuthLoading(false);
       if (user) {
-        // Clear auth form fields on successful login/state change
         setEmail('');
         setPassword('');
         setAuthError(null);
+        // Load categories for this user from localStorage
+        const storedCategories = localStorage.getItem(`userCategories_${user.uid}`);
+        if (storedCategories) {
+          setUserCategories(JSON.parse(storedCategories));
+        } else {
+          setUserCategories([]); // Ensure it's an empty array if nothing stored
+        }
+        setActiveTab('Todas'); // Reset to "Todas" on user change
+      } else {
+        // Clear categories if user logs out
+        setUserCategories([]);
+        setActiveTab('Todas');
       }
     });
-    return () => unsubscribe(); // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, []);
+
+  // Effect to extract categories from passwords and merge with user-created ones
+  useEffect(() => {
+    if (firebaseUser && passwords.length > 0) {
+      const categoriesFromPasswords = Array.from(new Set(passwords.map(p => p.categoria).filter(Boolean) as string[]));
+      
+      // Combine with existing user categories from localStorage (which should already be in userCategories state)
+      const combinedCategories = Array.from(new Set([...userCategories, ...categoriesFromPasswords]
+        .map(cat => cat.trim())
+        .filter(cat => cat.length > 0)
+        .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
+      ));
+
+      // Only update if there's a change to avoid infinite loops
+      if (JSON.stringify(combinedCategories) !== JSON.stringify(userCategories)) {
+        setUserCategories(combinedCategories);
+        localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(combinedCategories));
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [passwords, firebaseUser]); // userCategories is intentionally omitted to prevent loop on its own update
+
 
   const handleFirebaseError = (error: AuthError) => {
     console.error("Firebase Auth Error:", error);
@@ -97,7 +142,7 @@ export default function HomePage() {
       case 'auth/wrong-password':
         errorMessage = "Senha incorreta.";
         break;
-      case 'auth/invalid-credential': 
+      case 'auth/invalid-credential':
         errorMessage = "Email ou senha inválidos. Verifique os dados e tente novamente.";
         break;
       case 'auth/email-already-in-use':
@@ -130,7 +175,6 @@ export default function HomePage() {
     try {
       await createUserWithEmailAndPassword(auth, email, password);
       toast({ title: "Registro bem-sucedido!", description: "Você agora está logado." });
-      // onAuthStateChanged will handle setting the user
     } catch (error) {
       handleFirebaseError(error as AuthError);
     }
@@ -147,7 +191,6 @@ export default function HomePage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       toast({ title: "Login bem-sucedido!", description: "Bem-vindo de volta!" });
-      // onAuthStateChanged will handle setting the user
     } catch (error) {
       handleFirebaseError(error as AuthError);
     }
@@ -157,7 +200,6 @@ export default function HomePage() {
     try {
       await signOut(auth);
       toast({ title: "Logout", description: "Você saiu da sua conta." });
-      // onAuthStateChanged will handle clearing the user
     } catch (error) {
       console.error("Logout Error:", error);
       toast({ title: "Erro no Logout", description: (error as Error).message, variant: "destructive" });
@@ -191,7 +233,7 @@ export default function HomePage() {
     }
     const entryToUpdate: PasswordEntry = {
       id,
-      userId: firebaseUser.uid, // Ensure userId is set
+      userId: firebaseUser.uid,
       nome: data.nome,
       login: data.login,
       senha: data.senha,
@@ -207,13 +249,13 @@ export default function HomePage() {
   };
 
   const handleSubmitPasswordForm = async (data: PasswordFormValues, id?: string) => {
-    if (id) {
+    if (id && 'id' in (editingPassword || {})) { // Check if editingPassword is a full PasswordEntry
       await handleUpdatePassword(data, id);
     } else {
       await handleAddPassword(data);
     }
     setEditingPassword(null);
-    setIsAddEditDialogOpen(false); 
+    setIsAddEditDialogOpen(false);
   };
 
   const handleEditPassword = (entry: PasswordEntry) => {
@@ -258,7 +300,7 @@ export default function HomePage() {
          toast({ title: "Erro na Importação", description: (e as Error).message || "Falha ao processar o arquivo CSV.", variant: "destructive" });
     }
   };
-  
+
   const handleClearAllPasswords = async () => {
     if (!firebaseUser) {
       toast({ title: "Não autenticado", description: "Você precisa estar logado para limpar senhas.", variant: "destructive" });
@@ -289,6 +331,62 @@ export default function HomePage() {
       toast({ title: "Erro na Exportação", description: "Não foi possível exportar as senhas.", variant: "destructive" });
     }
   };
+
+  const handleOpenAddPasswordDialog = () => {
+    let initialCategory = "";
+    if (activeTab !== 'Todas' && activeTab !== ADD_CATEGORY_TAB_VALUE) {
+      initialCategory = activeTab;
+    }
+    setEditingPassword({ categoria: initialCategory }); // Pass partial data for new entry
+    setIsAddEditDialogOpen(true);
+  };
+
+  const handleAddCategory = useCallback(() => {
+    if (!firebaseUser) return false;
+    const trimmedName = newCategoryName.trim();
+    if (!trimmedName) {
+      toast({ title: "Nome Inválido", description: "O nome da categoria não pode ser vazio.", variant: "destructive" });
+      return false;
+    }
+    if (userCategories.some(cat => cat.toLowerCase() === trimmedName.toLowerCase())) {
+      toast({ title: "Categoria Duplicada", description: `A categoria "${trimmedName}" já existe.`, variant: "destructive" });
+      return false;
+    }
+    const updatedCategories = [...userCategories, trimmedName].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    setUserCategories(updatedCategories);
+    localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(updatedCategories));
+    setActiveTab(trimmedName);
+    setNewCategoryName(''); // Clear input
+    toast({title: "Categoria Adicionada", description: `Categoria "${trimmedName}" criada.`});
+    return true; // Indicate success
+  }, [newCategoryName, userCategories, firebaseUser, toast]);
+
+
+  const filteredPasswords = useMemo(() => {
+    let tempPasswords = passwords;
+
+    if (activeTab !== 'Todas' && activeTab !== ADD_CATEGORY_TAB_VALUE) {
+      tempPasswords = tempPasswords.filter(p => p.categoria?.toLowerCase() === activeTab.toLowerCase());
+    }
+
+    if (searchTerm) {
+      tempPasswords = tempPasswords.filter(p => {
+        const lowerSearchTerm = searchTerm.toLowerCase();
+        if (p.nome.toLowerCase().includes(lowerSearchTerm)) return true;
+        if (p.login.toLowerCase().includes(lowerSearchTerm)) return true;
+        if (p.categoria && p.categoria.toLowerCase().includes(lowerSearchTerm)) return true;
+        if (p.customFields) {
+          for (const field of p.customFields) {
+            if (field.label.toLowerCase().includes(lowerSearchTerm)) return true;
+            if (field.value.toLowerCase().includes(lowerSearchTerm)) return true;
+          }
+        }
+        return false;
+      });
+    }
+    return tempPasswords;
+  }, [passwords, activeTab, searchTerm]);
+
 
   if (authLoading) {
     return (
@@ -378,11 +476,11 @@ export default function HomePage() {
             )}
 
             {passwordManagerError && (
-              <Alert variant="destructive" className="mb-4">
+             <Alert variant="destructive" className="mb-4">
                 <ShieldAlert className="h-5 w-5" />
                 <AlertTitle>Erro de Conexão ou Dados</AlertTitle>
                 <AlertDescription>
-                  {passwordManagerError} Verifique a conexão com o banco de dados ou as configurações da API.
+                  {passwordManagerError} Verifique os logs do servidor (backend), a conexão com o banco de dados (MongoDB URI, IP Allowlist no Atlas) e as configurações da API. Tente recarregar a página.
                 </AlertDescription>
               </Alert>
             )}
@@ -400,10 +498,10 @@ export default function HomePage() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 </div>
                 <div className="md:col-span-2 flex flex-wrap gap-2 justify-end">
-                  <Button onClick={() => { setEditingPassword(null); setIsAddEditDialogOpen(true); }} className="bg-primary hover:bg-primary/90">
+                  <Button onClick={handleOpenAddPasswordDialog} className="bg-primary hover:bg-primary/90">
                     <PlusCircle size={18} className="mr-2" /> Adicionar Nova
                   </Button>
-                  
+
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" className="hover:bg-secondary">
@@ -421,8 +519,8 @@ export default function HomePage() {
                         <Zap size={16} className="mr-2" /> Gerar Senha
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem 
-                        onSelect={() => setIsClearAllDialogOpen(true)} 
+                      <DropdownMenuItem
+                        onSelect={() => setIsClearAllDialogOpen(true)}
                         className="text-destructive focus:text-destructive focus:bg-destructive/10"
                       >
                         <Trash2 size={16} className="mr-2" /> Limpar Tudo
@@ -433,13 +531,97 @@ export default function HomePage() {
               </div>
             </div>
 
-            <PasswordList
-              passwords={passwords}
-              isLoading={passwordsLoading}
-              onEdit={handleEditPassword}
-              onDelete={handleDeletePassword}
-              searchTerm={searchTerm}
-            />
+            <div className="mb-4">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                <div className="flex items-center border-b">
+                    <TabsList className="flex-grow">
+                      <ScrollArea className="w-full whitespace-nowrap">
+                        <div className="flex space-x-1 pb-1">
+                          <TabsTrigger value="Todas" className="flex items-center gap-1">
+                            <FolderKanban size={14} /> Todas
+                          </TabsTrigger>
+                          {userCategories.map(category => (
+                            <TabsTrigger key={category} value={category} className="flex items-center gap-1">
+                              <FolderKanban size={14} /> {category}
+                            </TabsTrigger>
+                          ))}
+                        </div>
+                        <ScrollBar orientation="horizontal" />
+                      </ScrollArea>
+                    </TabsList>
+                    <AlertDialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="ml-2 shrink-0" onClick={() => setIsAddCategoryDialogOpen(true)}>
+                          <Plus size={20} />
+                          <span className="sr-only">Adicionar Nova Categoria</span>
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Adicionar Nova Categoria</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Digite o nome para a nova aba de categoria.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <Input
+                          placeholder="Nome da Categoria"
+                          value={newCategoryName}
+                          onChange={(e) => setNewCategoryName(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                if(handleAddCategory()){
+                                   setIsAddCategoryDialogOpen(false);
+                                }
+                            }
+                          }}
+                        />
+                        <AlertDialogFooter>
+                          <AlertDialogCancel onClick={() => { setNewCategoryName(''); setIsAddCategoryDialogOpen(false); }}>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => {
+                             if(handleAddCategory()){
+                                setIsAddCategoryDialogOpen(false);
+                             }
+                          }}>Adicionar</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                </div>
+                <TabsContent value={activeTab} className="mt-4">
+                   <PasswordList
+                    passwords={filteredPasswords}
+                    isLoading={passwordsLoading}
+                    onEdit={handleEditPassword}
+                    onDelete={handleDeletePassword}
+                    searchTerm={searchTerm}
+                    activeTab={activeTab}
+                  />
+                </TabsContent>
+                 {/* Render a TabsContent for each category to ensure structure, even if empty, or rely on activeTab for filtering */}
+                 {userCategories.map(category => (
+                    <TabsContent key={`content-${category}`} value={category} className="mt-4">
+                         <PasswordList
+                            passwords={filteredPasswords} // filteredPasswords already considers activeTab
+                            isLoading={passwordsLoading}
+                            onEdit={handleEditPassword}
+                            onDelete={handleDeletePassword}
+                            searchTerm={searchTerm}
+                            activeTab={activeTab}
+                        />
+                    </TabsContent>
+                ))}
+                 <TabsContent key="content-todas" value="Todas" className="mt-4">
+                     <PasswordList
+                        passwords={filteredPasswords} // filteredPasswords already considers activeTab (="Todas" means no category filter)
+                        isLoading={passwordsLoading}
+                        onEdit={handleEditPassword}
+                        onDelete={handleDeletePassword}
+                        searchTerm={searchTerm}
+                        activeTab={activeTab}
+                    />
+                </TabsContent>
+              </Tabs>
+            </div>
           </>
         )}
       </main>
@@ -451,7 +633,7 @@ export default function HomePage() {
           if (!open) setEditingPassword(null);
         }}
         onSubmit={handleSubmitPasswordForm}
-        initialData={editingPassword}
+        initialData={editingPassword as PasswordEntry | null} // Cast because it can be Partial for new entries
       />
       <ImportPasswordsDialog
         isOpen={isImportDialogOpen}
@@ -474,6 +656,4 @@ export default function HomePage() {
     </div>
   );
 }
-    
-
     
