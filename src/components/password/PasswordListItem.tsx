@@ -33,15 +33,15 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const { toast } = useToast();
 
-  const handleCopy = (text: string | undefined, fieldName: string) => {
+  const handleCopy = (text: string | undefined, fieldNameForToast: string, fieldIdentifierForState: string) => {
     if (!text) {
       toast({ title: "Erro", description: "Nenhum valor para copiar.", variant: "destructive" });
       return;
     }
     navigator.clipboard.writeText(text)
       .then(() => {
-        toast({ title: "Copiado!", description: `${fieldName} copiado para a área de transferência.` });
-        setCopiedField(fieldName);
+        toast({ title: "Copiado!", description: `${fieldNameForToast} copiado para a área de transferência.` });
+        setCopiedField(fieldIdentifierForState);
         setTimeout(() => setCopiedField(null), 1500);
       })
       .catch(err => {
@@ -78,12 +78,42 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
     <Card className="mb-3 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-md">
       <CardHeader className="py-3 px-4">
         <div className="flex justify-between items-start">
-          <div className="flex-grow min-w-0">
-            <CardTitle className="font-headline text-lg text-primary truncate" title={entry.nome}>{entry.nome}</CardTitle>
+          <div className="flex-grow min-w-0 space-y-0.5">
+            <div className="flex items-center">
+              <CardTitle className="font-headline text-lg text-primary truncate mr-1" title={entry.nome}>
+                {entry.nome}
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleCopy(entry.nome, "Nome", "Nome")}
+                className={cn(
+                  "h-6 w-6 shrink-0 transition-transform duration-150",
+                  copiedField === "Nome" ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent'
+                )}
+                aria-label="Copiar Nome"
+              >
+                <Copy size={14} />
+              </Button>
+            </div>
             {entry.categoria && (
-              <Badge variant="secondary" className="mt-1 text-xs py-0.5 px-1.5">
-                <FolderKanban size={12} className="mr-1"/> {entry.categoria}
-              </Badge>
+              <div className="flex items-center">
+                <Badge variant="secondary" className="text-xs py-0.5 px-1.5">
+                  <FolderKanban size={12} className="mr-1"/> {entry.categoria}
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleCopy(entry.categoria, "Categoria", "Categoria")}
+                  className={cn(
+                    "h-5 w-5 ml-1 shrink-0 transition-transform duration-150",
+                    copiedField === "Categoria" ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent'
+                  )}
+                  aria-label="Copiar Categoria"
+                >
+                  <Copy size={10} />
+                </Button>
+              </div>
             )}
           </div>
           <div className="shrink-0 ml-2 flex items-center">
@@ -103,7 +133,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => handleCopy(entry.login, "Login")}
+                onClick={() => handleCopy(entry.login, "Login", "Login")}
                 className={cn(
                   "h-7 w-7 ml-1 shrink-0 transition-transform duration-150",
                   copiedField === "Login" ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent'
@@ -130,7 +160,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => handleCopy(entry.senha, "Senha")}
+                onClick={() => handleCopy(entry.senha, "Senha", "Senha")}
                 className={cn(
                   "h-7 w-7 ml-1 shrink-0 transition-transform duration-150",
                   copiedField === "Senha" ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent'
@@ -144,16 +174,28 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
             {entry.customFields && entry.customFields.length > 0 && (
               <div className="mt-3 pt-3 border-t border-border/80 space-y-1">
                 {entry.customFields.map((field, index) => (
-                  <div key={index} className="flex text-xs">
+                  <div key={index} className="flex items-center text-xs">
                     <strong className="text-foreground/70 font-medium w-24 shrink-0 truncate" title={field.label}>{field.label}:</strong>
-                    <span className="text-foreground flex-1 break-all" title={field.value}>{field.value}</span>
+                    <span className="text-foreground flex-1 break-all mr-1" title={field.value}>{field.value}</span>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleCopy(field.value, `Valor de "${field.label}"`, `customFieldValue-${index}`)}
+                        className={cn(
+                          "h-6 w-6 shrink-0 transition-transform duration-150",
+                          copiedField === `customFieldValue-${index}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent'
+                        )}
+                        aria-label={`Copiar valor do campo ${field.label}`}
+                      >
+                        <Copy size={12} />
+                    </Button>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="flex flex-col gap-2 shrink-0 self-start sm:self-start">
+          <div className="flex flex-col gap-2 shrink-0 self-start sm:self-end">
             <Button variant="outline" size="sm" onClick={() => onEdit(entry)} className="text-xs h-8 px-3 hover:bg-secondary">
               <Edit2 size={14} className="mr-1.5" /> Editar
             </Button>
@@ -182,3 +224,4 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
     </Card>
   );
 }
+
