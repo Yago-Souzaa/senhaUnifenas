@@ -3,20 +3,28 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { PasswordEntry } from '@/types';
-// v4 as uuidv4 is no longer needed as MongoDB generates IDs
 
 const API_BASE_URL = '/api/passwords';
 
-export function usePasswordManager() {
+export function usePasswordManager(currentUserId?: string | null) { // currentUserId é o UID do Firebase
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchPasswords = useCallback(async () => {
+    if (!currentUserId) {
+      setPasswords([]);
+      setIsLoading(false);
+      return;
+    }
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(API_BASE_URL);
+      const response = await fetch(API_BASE_URL, {
+        headers: {
+          'X-User-ID': currentUserId, // Usaremos o UID do Firebase aqui
+        }
+      });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `Failed to fetch passwords: ${response.statusText}`);
@@ -26,50 +34,73 @@ export function usePasswordManager() {
     } catch (err: any) {
       console.error("Failed to load passwords:", err);
       setError(err.message || 'An unknown error occurred while fetching passwords.');
-      setPasswords([]); // Clear passwords on error
+      setPasswords([]);
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currentUserId]);
 
   useEffect(() => {
     fetchPasswords();
   }, [fetchPasswords]);
 
-  const addPassword = useCallback(async (entryData: Omit<PasswordEntry, 'id'>) => {
+  const addPassword = useCallback(async (entryData: Omit<PasswordEntry, 'id' | 'userId'>) => {
+    if (!currentUserId) {
+      const err = new Error('User not authenticated');
+      setError(err.message);
+      throw err;
+    }
     setIsLoading(true);
     setError(null);
     try {
+      const payload = { ...entryData, userId: currentUserId };
       const response = await fetch(API_BASE_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(entryData),
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-User-ID': currentUserId,
+        },
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `Failed to add password: ${response.statusText}`);
       }
       const newPassword: PasswordEntry = await response.json();
-      setPasswords(prev => [...prev, newPassword]); // Optimistic update possible here too
-      await fetchPasswords(); // Re-fetch to ensure consistency
+      setPasswords(prev => [...prev, newPassword]);
+      // await fetchPasswords(); // Re-fetch or update locally
       return newPassword;
     } catch (err: any) {
       console.error("Failed to add password:", err);
       setError(err.message || 'An unknown error occurred while adding password.');
-      throw err; // Re-throw to be caught by caller for toast messages
+      throw err;
     } finally {
       setIsLoading(false);
     }
-  }, [fetchPasswords]);
+  }, [currentUserId]);
 
   const updatePassword = useCallback(async (updatedEntry: PasswordEntry) => {
+    if (!currentUserId) {
+      const err = new Error('User not authenticated');
+      setError(err.message);
+      throw err;
+    }
+    if (updatedEntry.userId && updatedEntry.userId !== currentUserId) {
+        const err = new Error('User not authorized to update this entry');
+        setError(err.message);
+        throw err;
+    }
     setIsLoading(true);
     setError(null);
     try {
+      const payload = { ...updatedEntry, userId: currentUserId };
       const response = await fetch(`${API_BASE_URL}/${updatedEntry.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedEntry),
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-User-ID': currentUserId,
+        },
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -77,7 +108,6 @@ export function usePasswordManager() {
       }
       const returnedEntry: PasswordEntry = await response.json();
       setPasswords(prev => prev.map(p => p.id === returnedEntry.id ? returnedEntry : p));
-      // await fetchPasswords(); // Re-fetch or update locally
       return returnedEntry;
     } catch (err: any) {
       console.error("Failed to update password:", err);
@@ -86,21 +116,28 @@ export function usePasswordManager() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currentUserId]);
 
   const deletePassword = useCallback(async (id: string) => {
+    if (!currentUserId) {
+      const err = new Error('User not authenticated');
+      setError(err.message);
+      throw err;
+    }
     setIsLoading(true);
     setError(null);
     try {
       const response = await fetch(`${API_BASE_URL}/${id}`, {
         method: 'DELETE',
+        headers: {
+          'X-User-ID': currentUserId,
+        }
       });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `Failed to delete password: ${response.statusText}`);
       }
       setPasswords(prev => prev.filter(p => p.id !== id));
-      // await fetchPasswords(); // Re-fetch or update locally
     } catch (err: any) {
       console.error("Failed to delete password:", err);
       setError(err.message || 'An unknown error occurred while deleting password.');
@@ -108,19 +145,27 @@ export function usePasswordManager() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currentUserId]);
 
-  // Import is now handled by an API endpoint. The hook provides a function to call that endpoint.
   const importPasswords = useCallback(async (file: File): Promise<{ importedCount: number, message?: string }> => {
+    if (!currentUserId) {
+      const err = new Error('User not authenticated');
+      setError(err.message);
+      throw err;
+    }
     setIsLoading(true);
     setError(null);
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('userId', currentUserId); // Add userId to form data
       
       const response = await fetch(`${API_BASE_URL}/import`, {
         method: 'POST',
-        body: formData, // No Content-Type header needed, browser sets it for FormData
+        body: formData,
+        headers: { // API Key or other auth might be needed if your API is protected beyond X-User-ID
+           'X-User-ID': currentUserId, // Still useful for direct identification on backend
+        }
       });
 
       const result = await response.json();
@@ -129,23 +174,30 @@ export function usePasswordManager() {
         throw new Error(result.message || `Failed to import passwords: ${response.statusText}`);
       }
       
-      await fetchPasswords(); // Refresh the list after import
+      await fetchPasswords();
       return { importedCount: result.importedCount, message: result.message };
     } catch (err: any) {
       console.error("Failed to import passwords:", err);
       setError(err.message || 'An unknown error occurred during import.');
-      throw err; // Re-throw for UI handling
+      throw err;
     } finally {
       setIsLoading(false);
     }
-  }, [fetchPasswords]);
+  }, [fetchPasswords, currentUserId]);
   
-  // Export is now handled by an API endpoint. This function triggers the download.
   const exportPasswordsToCSV = useCallback(async (): Promise<boolean> => {
+    if (!currentUserId) {
+      setError('User not authenticated for export.');
+      return false;
+    }
     setIsLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_BASE_URL}/export`);
+      const response = await fetch(`${API_BASE_URL}/export`, {
+        headers: {
+          'X-User-ID': currentUserId,
+        }
+      });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `Failed to export passwords: ${response.statusText}`);
@@ -164,12 +216,11 @@ export function usePasswordManager() {
     } catch (err: any) {
       console.error("Failed to export passwords:", err);
       setError(err.message || 'An unknown error occurred during export.');
-      // No throw here, let the UI handle toast based on boolean
       return false; 
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currentUserId]);
 
   const generatePassword = useCallback((length: number, useUppercase: boolean, useLowercase: boolean, useNumbers: boolean, useSymbols: boolean): string => {
     const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -195,18 +246,25 @@ export function usePasswordManager() {
   }, []);
 
   const clearAllPasswords = useCallback(async () => {
+    if (!currentUserId) {
+      const err = new Error('User not authenticated');
+      setError(err.message);
+      throw err;
+    }
     setIsLoading(true);
     setError(null);
     try {
       const response = await fetch(`${API_BASE_URL}/clear`, {
-        method: 'POST', // Use POST for destructive operations
+        method: 'POST',
+        headers: {
+          'X-User-ID': currentUserId,
+        }
       });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || `Failed to clear passwords: ${response.statusText}`);
       }
       setPasswords([]);
-      // await fetchPasswords(); // Re-fetch or update locally
     } catch (err: any) {
       console.error("Failed to clear passwords:", err);
       setError(err.message || 'An unknown error occurred while clearing passwords.');
@@ -214,14 +272,14 @@ export function usePasswordManager() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [currentUserId]);
 
 
   return {
     passwords,
     isLoading,
-    error, // Expose error state to UI
-    fetchPasswords, // Expose fetch for manual refresh if needed
+    error,
+    fetchPasswords,
     addPassword,
     updatePassword,
     deletePassword,
