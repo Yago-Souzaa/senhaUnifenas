@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, XCircle, UserPlus, LogIn, KeyRound, EllipsisVertical, FolderKanban, Plus } from 'lucide-react';
+import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, XCircle, UserPlus, LogIn, KeyRound, EllipsisVertical, FolderKanban, Plus, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -83,6 +83,8 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState<string>('Todas');
   const [isAddCategoryDialogOpen, setIsAddCategoryDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
+  const [isDeleteCategoryDialogOpen, setIsDeleteCategoryDialogOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -93,16 +95,14 @@ export default function HomePage() {
         setEmail('');
         setPassword('');
         setAuthError(null);
-        // Load categories for this user from localStorage
         const storedCategories = localStorage.getItem(`userCategories_${user.uid}`);
         if (storedCategories) {
           setUserCategories(JSON.parse(storedCategories));
         } else {
-          setUserCategories([]); // Ensure it's an empty array if nothing stored
+          setUserCategories([]); 
         }
-        setActiveTab('Todas'); // Reset to "Todas" on user change
+        setActiveTab('Todas'); 
       } else {
-        // Clear categories if user logs out
         setUserCategories([]);
         setActiveTab('Todas');
       }
@@ -110,28 +110,23 @@ export default function HomePage() {
     return () => unsubscribe();
   }, []);
 
-  // Effect to extract categories from passwords and merge with user-created ones
   useEffect(() => {
     if (firebaseUser && passwords.length > 0) {
       const categoriesFromPasswords = Array.from(new Set(passwords.map(p => p.categoria).filter(Boolean) as string[]));
       
-      // Combine with existing user categories from localStorage (which should already be in userCategories state)
       const combinedCategories = Array.from(new Set([...userCategories, ...categoriesFromPasswords]
         .map(cat => cat.trim())
         .filter(cat => cat.length > 0)
         .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
       ));
-
-      // Only update if there's a change to avoid infinite loops
-      // and also ensure that userCategories is not empty before comparing
-      // an empty passwords category list with an existing userCategories list from localstorage
+      
       if (JSON.stringify(combinedCategories) !== JSON.stringify(userCategories) && (categoriesFromPasswords.length > 0 || userCategories.length === 0) ) {
         setUserCategories(combinedCategories);
         localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(combinedCategories));
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [passwords, firebaseUser]); // userCategories is intentionally omitted to prevent loop on its own update
+  }, [passwords, firebaseUser]);
 
 
   const handleFirebaseError = (error: AuthError) => {
@@ -257,7 +252,7 @@ export default function HomePage() {
   };
 
   const handleSubmitPasswordForm = async (data: PasswordFormValues, id?: string) => {
-    if (id && 'id' in (editingPassword || {})) { // Check if editingPassword is a full PasswordEntry
+    if (id && 'id' in (editingPassword || {})) { 
       await handleUpdatePassword(data, id);
     } else {
       await handleAddPassword(data);
@@ -345,7 +340,7 @@ export default function HomePage() {
     if (activeTab !== 'Todas') {
       initialCategory = activeTab;
     }
-    setEditingPassword({ categoria: initialCategory }); // Pass partial data for new entry
+    setEditingPassword({ categoria: initialCategory }); 
     setIsAddEditDialogOpen(true);
   };
 
@@ -364,10 +359,32 @@ export default function HomePage() {
     setUserCategories(updatedCategories);
     localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(updatedCategories));
     setActiveTab(trimmedName);
-    setNewCategoryName(''); // Clear input
+    setNewCategoryName(''); 
     toast({title: "Categoria Adicionada", description: `Categoria "${trimmedName}" criada.`});
-    return true; // Indicate success
+    return true; 
   }, [newCategoryName, userCategories, firebaseUser, toast]);
+
+  const handleConfirmDeleteCategory = useCallback(() => {
+    if (!firebaseUser || !categoryToDelete) return;
+
+    const isCategoryEmpty = !passwords.some(p => p.categoria?.toLowerCase() === categoryToDelete.toLowerCase());
+
+    if (isCategoryEmpty) {
+      const updatedCategories = userCategories.filter(cat => cat.toLowerCase() !== categoryToDelete.toLowerCase());
+      setUserCategories(updatedCategories);
+      localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(updatedCategories));
+      setActiveTab('Todas'); 
+      toast({ title: "Categoria Excluída", description: `A categoria "${categoryToDelete}" foi excluída.` });
+    } else {
+      toast({
+        title: "Exclusão Falhou",
+        description: `A categoria "${categoryToDelete}" não pode ser excluída pois contém senhas. Mova ou exclua as senhas primeiro.`,
+        variant: "destructive",
+      });
+    }
+    setIsDeleteCategoryDialogOpen(false);
+    setCategoryToDelete(null);
+  }, [firebaseUser, categoryToDelete, passwords, userCategories, toast, setActiveTab]);
 
 
   const filteredPasswords = useMemo(() => {
@@ -549,8 +566,23 @@ export default function HomePage() {
                             <FolderKanban size={14} /> Todas
                           </TabsTrigger>
                           {userCategories.map(category => (
-                            <TabsTrigger key={category} value={category} className="flex items-center gap-1">
-                              <FolderKanban size={14} /> {category}
+                            <TabsTrigger key={category} value={category} className="relative group pr-7 py-1.5">
+                              <FolderKanban size={14} className="mr-1.5" /> 
+                              {category}
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute top-1/2 right-0.5 -translate-y-1/2 h-5 w-5 opacity-0 group-hover:opacity-100 hover:bg-destructive/20"
+                                onClick={(e) => {
+                                  e.stopPropagation(); 
+                                  e.preventDefault(); 
+                                  setCategoryToDelete(category);
+                                  setIsDeleteCategoryDialogOpen(true);
+                                }}
+                                title={`Excluir categoria ${category}`}
+                              >
+                                <X size={12} className="text-destructive/80 hover:text-destructive" />
+                              </Button>
                             </TabsTrigger>
                           ))}
                         </div>
@@ -595,8 +627,7 @@ export default function HomePage() {
                       </AlertDialogContent>
                     </AlertDialog>
                 </div>
-
-                 {/* Render a TabsContent for "Todas" */}
+                
                  <TabsContent key="content-todas" value="Todas" className="mt-4">
                      <PasswordList
                         passwords={filteredPasswords}
@@ -608,7 +639,6 @@ export default function HomePage() {
                     />
                 </TabsContent>
                 
-                {/* Render a TabsContent for each category */}
                  {userCategories.map(category => (
                     <TabsContent key={`content-${category}`} value={category} className="mt-4">
                          <PasswordList
@@ -634,7 +664,7 @@ export default function HomePage() {
           if (!open) setEditingPassword(null);
         }}
         onSubmit={handleSubmitPasswordForm}
-        initialData={editingPassword as PasswordEntry | null} // Cast because it can be Partial for new entries
+        initialData={editingPassword as PasswordEntry | null} 
       />
       <ImportPasswordsDialog
         isOpen={isImportDialogOpen}
@@ -651,6 +681,24 @@ export default function HomePage() {
         onOpenChange={setIsClearAllDialogOpen}
         onConfirm={handleClearAllPasswords}
       />
+       <AlertDialog open={isDeleteCategoryDialogOpen} onOpenChange={setIsDeleteCategoryDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir Categoria "{categoryToDelete}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você tem certeza que deseja excluir esta categoria? <br/>
+              Somente categorias vazias podem ser excluídas. Se esta categoria não estiver vazia, a exclusão falhará. As senhas existentes nesta categoria não serão apagadas, mas ficarão sem categoria definida.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setIsDeleteCategoryDialogOpen(false); setCategoryToDelete(null); }}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDeleteCategory} className="bg-destructive hover:bg-destructive/90">
+              Confirmar Exclusão
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <footer className="text-center py-4 text-sm text-muted-foreground border-t mt-auto">
         SenhaFacil &copy; {new Date().getFullYear()}
       </footer>
