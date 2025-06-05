@@ -136,7 +136,7 @@ export default function SettingsPage() {
     <div className="min-h-screen flex flex-col">
       <Header user={firebaseUser} onLogout={handleLogoutFirebase} />
       <main className="container mx-auto py-8 px-4 flex-grow">
-        <Button variant="default" asChild className="mb-6">
+        <Button variant="default" asChild className="mb-6 bg-primary hover:bg-primary/90 text-primary-foreground">
           <Link href="/">
             <ArrowLeft size={18} className="mr-2" />
             Voltar para Início
@@ -186,7 +186,7 @@ export default function SettingsPage() {
               )}
             </CardContent>
             <CardFooter>
-              <Button type="submit" disabled={isUpdating} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground">
+              <Button type="submit" disabled={isUpdating} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
                 {isUpdating ? 'Alterando Senha...' : 'Alterar Senha'}
               </Button>
             </CardFooter>
