@@ -567,40 +567,45 @@ export default function HomePage() {
                           <TabsTrigger value="Todas" className="flex items-center gap-1">
                             <FolderKanban size={14} /> Todas
                           </TabsTrigger>
-                          {userCategories.map(category => (
-                            <TabsTrigger key={category} value={category} className="relative group pr-7 py-1.5">
-                              <FolderKanban size={14} className="mr-1.5" />
-                              {category}
-                              <Button
-                                asChild
-                                variant="ghost"
-                                size="icon"
-                                className="absolute top-1/2 right-0.5 -translate-y-1/2 h-5 w-5 opacity-0 group-hover:opacity-100 hover:bg-destructive/20"
-                                title={`Excluir categoria ${category}`}
-                              >
-                                <div
-                                  role="button"
-                                  tabIndex={0}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    setCategoryToDelete(category);
-                                    setIsDeleteCategoryDialogOpen(true);
-                                  }}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ') {
-                                      e.stopPropagation();
-                                      e.preventDefault();
-                                      setCategoryToDelete(category);
-                                      setIsDeleteCategoryDialogOpen(true);
-                                    }
-                                  }}
-                                >
-                                  <X size={12} className="text-destructive/80 hover:text-destructive" />
-                                </div>
-                              </Button>
-                            </TabsTrigger>
-                          ))}
+                          {userCategories.map(category => {
+                            const isCategoryEmpty = !passwords.some(p => p.categoria?.toLowerCase() === category.toLowerCase());
+                            return (
+                              <TabsTrigger key={category} value={category} className="relative group pr-7 py-1.5">
+                                <FolderKanban size={14} className="mr-1.5" />
+                                {category}
+                                {isCategoryEmpty && (
+                                  <Button
+                                    asChild
+                                    variant="ghost"
+                                    size="icon"
+                                    className="absolute top-1/2 right-0.5 -translate-y-1/2 h-5 w-5 opacity-0 group-hover:opacity-100 hover:bg-destructive/20"
+                                    title={`Excluir categoria ${category}`}
+                                  >
+                                    <div
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        e.preventDefault();
+                                        setCategoryToDelete(category);
+                                        setIsDeleteCategoryDialogOpen(true);
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter' || e.key === ' ') {
+                                          e.stopPropagation();
+                                          e.preventDefault();
+                                          setCategoryToDelete(category);
+                                          setIsDeleteCategoryDialogOpen(true);
+                                        }
+                                      }}
+                                    >
+                                      <X size={12} className="text-destructive/80 hover:text-destructive" />
+                                    </div>
+                                  </Button>
+                                )}
+                              </TabsTrigger>
+                            );
+                          })}
                         </div>
                         <ScrollBar orientation="horizontal" />
                       </ScrollArea>
@@ -643,7 +648,6 @@ export default function HomePage() {
                       </AlertDialogContent>
                     </AlertDialog>
                 </div>
-
                  <TabsContent key="content-todas" value="Todas" className="mt-4">
                      <PasswordList
                         passwords={filteredPasswords}
@@ -654,7 +658,6 @@ export default function HomePage() {
                         activeTab={activeTab}
                     />
                 </TabsContent>
-
                  {userCategories.map(category => (
                     <TabsContent key={`content-${category}`} value={category} className="mt-4">
                          <PasswordList
