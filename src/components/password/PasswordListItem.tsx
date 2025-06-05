@@ -95,8 +95,8 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
       </CardHeader>
 
       <CardContent className="pt-2 pb-3 px-4">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-x-4 gap-y-2">
-          <div className="text-xs space-y-1 flex-grow min-w-0">
+        <div className="flex flex-col sm:flex-row sm:justify-between gap-4">
+          <div className="text-sm space-y-1.5 flex-grow min-w-0">
             <div className="flex items-center">
               <strong className="text-foreground/70 font-medium w-12 shrink-0">Login:</strong>
               <span className="truncate flex-1" title={entry.login}>{entry.login}</span>
@@ -105,12 +105,12 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
                 size="icon"
                 onClick={() => handleCopy(entry.login, "Login")}
                 className={cn(
-                  "h-6 w-6 ml-1 shrink-0 transition-transform duration-150",
+                  "h-7 w-7 ml-1 shrink-0 transition-transform duration-150",
                   copiedField === "Login" ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent'
                 )}
                 aria-label="Copiar Login"
               >
-                <Copy size={12} />
+                <Copy size={14} />
               </Button>
             </div>
             <div className="flex items-center">
@@ -122,44 +122,45 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
                 variant="ghost"
                 size="icon"
                 onClick={() => setShowPassword(!showPassword)}
-                className="h-6 w-6 ml-1 shrink-0 text-muted-foreground hover:text-accent"
+                className="h-7 w-7 ml-1 shrink-0 text-muted-foreground hover:text-accent"
                 aria-label={showPassword ? "Esconder Senha" : "Mostrar Senha"}
               >
-                {showPassword ? <EyeOff size={12} /> : <Eye size={12} />}
+                {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => handleCopy(entry.senha, "Senha")}
                 className={cn(
-                  "h-6 w-6 ml-1 shrink-0 transition-transform duration-150",
+                  "h-7 w-7 ml-1 shrink-0 transition-transform duration-150",
                   copiedField === "Senha" ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent'
                 )}
                 aria-label="Copiar Senha"
               >
-                <Copy size={12} />
+                <Copy size={14} />
               </Button>
             </div>
 
             {entry.customFields && entry.customFields.length > 0 && (
-              <div className="mt-1 pt-1 border-t border-border/50">
+              <div className="mt-3 pt-3 border-t border-border/80 space-y-1">
                 {entry.customFields.map((field, index) => (
-                  <p key={index} className="truncate text-xs">
-                    <strong className="text-foreground/70 font-medium">{field.label}:</strong> {field.value}
-                  </p>
+                  <div key={index} className="flex text-xs">
+                    <strong className="text-foreground/70 font-medium w-24 shrink-0 truncate" title={field.label}>{field.label}:</strong>
+                    <span className="text-foreground flex-1 break-all" title={field.value}>{field.value}</span>
+                  </div>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="flex flex-row md:flex-col gap-2 items-start self-start md:self-auto md:items-end shrink-0 mt-1 md:mt-0">
-            <Button variant="outline" size="sm" onClick={() => onEdit(entry)} className="text-xs h-7 px-2 hover:bg-secondary">
-              <Edit2 size={12} className="mr-1" /> Editar
+          <div className="flex flex-col gap-2 shrink-0 self-start sm:self-start">
+            <Button variant="outline" size="sm" onClick={() => onEdit(entry)} className="text-xs h-8 px-3 hover:bg-secondary">
+              <Edit2 size={14} className="mr-1.5" /> Editar
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm" className="text-xs h-7 px-2 hover:bg-destructive/90">
-                  <Trash2 size={12} className="mr-1" /> Deletar
+                <Button variant="destructive" size="sm" className="text-xs h-8 px-3 hover:bg-destructive/90">
+                  <Trash2 size={14} className="mr-1.5" /> Deletar
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
