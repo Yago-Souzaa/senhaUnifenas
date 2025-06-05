@@ -48,7 +48,7 @@ export default function HomePage() {
     generatePassword,
     clearAllPasswords,
     exportPasswordsToCSV,
-  } = usePasswordManager(firebaseUser?.uid); // Pass Firebase user UID
+  } = usePasswordManager(firebaseUser?.uid); 
   const { toast } = useToast();
 
   const [isAddEditDialogOpen, setIsAddEditDialogOpen] = useState(false);
@@ -90,6 +90,9 @@ export default function HomePage() {
       case 'auth/wrong-password':
         errorMessage = "Senha incorreta.";
         break;
+      case 'auth/invalid-credential': // Added specific case
+        errorMessage = "Email ou senha inválidos. Verifique os dados e tente novamente.";
+        break;
       case 'auth/email-already-in-use':
         errorMessage = "Este email já está em uso por outra conta.";
         break;
@@ -103,7 +106,7 @@ export default function HomePage() {
         errorMessage = "Muitas tentativas de login falharam. Tente novamente mais tarde.";
         break;
       default:
-        errorMessage = error.message || "Ocorreu um erro de autenticação desconhecido.";
+        errorMessage = (error as Error).message || "Ocorreu um erro de autenticação desconhecido.";
     }
     setAuthError(errorMessage);
     toast({ title: "Erro de Autenticação", description: errorMessage, variant: "destructive"});
@@ -258,7 +261,7 @@ export default function HomePage() {
       await clearAllPasswords();
       toast({ title: "Tudo Limpo!", description: "Todas as senhas foram removidas.", variant: "destructive" });
       setIsClearAllDialogOpen(false);
-    } catch (e: any) { // Corrected line
+    } catch (e: any) {
       toast({ title: "Erro ao Limpar", description: (e as Error).message || "Não foi possível limpar todas as senhas.", variant: "destructive" });
     }
   };
@@ -450,3 +453,5 @@ export default function HomePage() {
     </div>
   );
 }
+
+    
