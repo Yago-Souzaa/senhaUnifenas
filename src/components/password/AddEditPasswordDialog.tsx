@@ -24,6 +24,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useEffect } from "react";
 import { PlusCircle, Trash2 } from "lucide-react";
 
@@ -36,7 +43,7 @@ const passwordFormSchema = z.object({
   nome: z.string().min(1, { message: "Nome é obrigatório." }),
   login: z.string().min(1, { message: "Login é obrigatório." }),
   senha: z.string().optional(),
-  categoria: z.string().optional(), // Novo campo para categoria
+  categoria: z.string().optional(),
   customFields: z.array(customFieldSchema).optional(),
 });
 
@@ -46,17 +53,18 @@ interface AddEditPasswordDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: PasswordFormValues, id?: string) => void;
-  initialData?: PasswordEntry | null;
+  initialData?: PasswordEntry | Partial<PasswordEntry> | null;
+  userCategories: string[];
 }
 
-export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialData }: AddEditPasswordDialogProps) {
+export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialData, userCategories }: AddEditPasswordDialogProps) {
   const form = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordFormSchema),
     defaultValues: {
       nome: "",
       login: "",
       senha: "",
-      categoria: "", // Default para categoria
+      categoria: "",
       customFields: [],
     },
   });
@@ -68,32 +76,18 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
 
   useEffect(() => {
     if (isOpen) {
-      if (initialData) {
-        const migratedCustomFields: Array<{ label: string; value: string }> = initialData.customFields ? [...initialData.customFields] : [];
-        // Lógica de migração de campos antigos para customFields (se necessário no futuro)
-        // Ex: const oldOptionalFieldsMap: Record<string, string> = { ip: "IP" };
-
-        form.reset({
-          nome: initialData.nome || "",
-          login: initialData.login || "",
-          senha: initialData.senha || "",
-          categoria: initialData.categoria || "", // Define valor inicial da categoria
-          customFields: migratedCustomFields,
-        });
-      } else {
-        form.reset({
-          nome: "",
-          login: "",
-          senha: "",
-          categoria: "", // Reseta categoria
-          customFields: [], 
-        });
-      }
+      form.reset({
+        nome: initialData?.nome || "",
+        login: initialData?.login || "",
+        senha: initialData?.senha || "",
+        categoria: initialData?.categoria || "",
+        customFields: initialData?.customFields || [],
+      });
     }
   }, [initialData, form, isOpen]);
 
   const handleSubmit = (data: PasswordFormValues) => {
-    onSubmit(data, initialData?.id);
+    onSubmit(data, initialData?.id as string | undefined);
     onOpenChange(false);
   };
 
@@ -101,9 +95,9 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md md:max-w-lg bg-card max-h-[90vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle className="font-headline text-primary">{initialData ? "Editar Senha" : "Adicionar Nova Senha"}</DialogTitle>
+          <DialogTitle className="font-headline text-primary">{initialData?.id ? "Editar Senha" : "Adicionar Nova Senha"}</DialogTitle>
           <DialogDescription>
-            {initialData ? "Atualize os detalhes da senha." : "Preencha os campos para adicionar uma nova senha."}
+            {initialData?.id ? "Atualize os detalhes da senha." : "Preencha os campos para adicionar uma nova senha."}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -153,9 +147,21 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Categoria</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Ex: Servidores, Email, Redes Sociais" {...field} />
-                  </FormControl>
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione uma categoria" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="">Sem Categoria</SelectItem>
+                      {userCategories.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
@@ -211,7 +217,7 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
                 <Button type="button" variant="outline">Cancelar</Button>
               </DialogClose>
               <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                {initialData ? "Salvar Alterações" : "Adicionar Senha"}
+                {initialData?.id ? "Salvar Alterações" : "Adicionar Senha"}
               </Button>
             </DialogFooter>
           </form>
@@ -220,3 +226,4 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
     </Dialog>
   );
 }
+

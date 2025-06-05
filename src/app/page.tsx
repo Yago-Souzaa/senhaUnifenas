@@ -254,7 +254,7 @@ export default function HomePage() {
   };
 
   const handleSubmitPasswordForm = async (data: PasswordFormValues, id?: string) => {
-    if (id && 'id' in (editingPassword || {})) {
+    if (id && editingPassword && 'id' in editingPassword && editingPassword.id === id) {
       await handleUpdatePassword(data, id);
     } else {
       await handleAddPassword(data);
@@ -338,11 +338,7 @@ export default function HomePage() {
   };
 
   const handleOpenAddPasswordDialog = () => {
-    let initialCategory = "";
-    if (activeTab !== 'Todas') {
-      initialCategory = activeTab;
-    }
-    setEditingPassword({ categoria: initialCategory });
+    setEditingPassword({ categoria: activeTab !== 'Todas' ? activeTab : "" });
     setIsAddEditDialogOpen(true);
   };
 
@@ -684,7 +680,8 @@ export default function HomePage() {
           if (!open) setEditingPassword(null);
         }}
         onSubmit={handleSubmitPasswordForm}
-        initialData={editingPassword as PasswordEntry | null}
+        initialData={editingPassword}
+        userCategories={userCategories}
       />
       <ImportPasswordsDialog
         isOpen={isImportDialogOpen}
@@ -725,3 +722,4 @@ export default function HomePage() {
     </div>
   );
 }
+
