@@ -4,7 +4,7 @@
 import type { PasswordEntry } from '@/types';
 import { PasswordListItem } from './PasswordListItem';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertTriangle, FolderOpen } from 'lucide-react'; // Added FolderOpen
+import { AlertTriangle, FolderOpen } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 
 interface PasswordListProps {
