@@ -21,10 +21,10 @@ export function Header({ user, onLogout }: HeaderProps) {
           <div className="flex items-center gap-2 sm:gap-3">
             <span className="text-sm hidden sm:inline">{user.email}</span>
             
-            <Button variant="ghost" size="icon" asChild className="hover:bg-primary/80 text-primary-foreground h-8 w-8 sm:h-9 sm:w-auto sm:px-3">
+            <Button variant="ghost" size="icon" asChild className="hover:bg-primary/80 text-primary-foreground h-8 w-8 sm:h-9 sm:w-9">
               <Link href="/settings" title="Configurações da Conta">
-                <Settings size={18} className="sm:mr-0 md:mr-1" />
-                <span className="sr-only sm:hidden md:inline hidden">Config.</span>
+                <Settings size={18} />
+                <span className="sr-only">Config.</span>
               </Link>
             </Button>
 
