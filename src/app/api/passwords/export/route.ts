@@ -1,5 +1,5 @@
 
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { connectToDatabase, fromMongo } from '@/lib/mongodb';
 import type { PasswordEntry } from '@/types';
 
@@ -12,24 +12,30 @@ const escapeCSVField = (field?: string | number | null): string => {
     if (stringField.includes(',') || stringField.includes('\n') || stringField.includes('"')) {
       return `"${stringField.replace(/"/g, '""')}"`;
     }
-    return `"${stringField}"`; // Always quote for safety, even if not strictly necessary
+    return `"${stringField}"`;
   };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const userId = request.headers.get('X-User-ID');
+  if (!userId) {
+    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+  }
+
   try {
     const { passwordsCollection } = await connectToDatabase();
-    const passwordsFromDb = await passwordsCollection.find({}).toArray();
+    // Filtrar senhas pelo userId
+    const passwordsFromDb = await passwordsCollection.find({ userId: userId }).toArray();
     const passwords = passwordsFromDb.map(doc => fromMongo(doc as any)) as PasswordEntry[];
 
     if (passwords.length === 0) {
-      return NextResponse.json({ message: "No passwords to export" }, { status: 404 });
+      return NextResponse.json({ message: "No passwords to export for this user" }, { status: 404 });
     }
 
     const fixedHeaders = ["nome", "login", "senha", "categoria"];
     const customFieldLabels = new Set<string>();
     passwords.forEach(p => {
       p.customFields?.forEach(cf => {
-        if (cf.label && !fixedHeaders.includes(cf.label.toLowerCase())) { // Avoid duplicating fixed headers
+        if (cf.label && !fixedHeaders.includes(cf.label.toLowerCase())) {
              customFieldLabels.add(cf.label);
         }
       });
@@ -48,7 +54,7 @@ export async function GET() {
         };
         
         p.customFields?.forEach(cf => {
-          if (cf.label) { // Ensure label exists
+          if (cf.label) {
             rowValues[cf.label] = cf.value;
           }
         });

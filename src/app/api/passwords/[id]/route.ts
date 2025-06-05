@@ -1,6 +1,6 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { connectToDatabase, fromMongo, toMongo } from '@/lib/mongodb';
+import { connectToDatabase, fromMongo } from '@/lib/mongodb';
 import type { PasswordEntry } from '@/types';
 import { ObjectId } from 'mongodb';
 
@@ -9,16 +9,22 @@ interface Params {
 }
 
 export async function GET(request: NextRequest, { params }: { params: Params }) {
+  const userId = request.headers.get('X-User-ID');
+  if (!userId) {
+    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+  }
+
   try {
     const { id } = params;
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ message: 'Invalid ID format' }, { status: 400 });
     }
     const { passwordsCollection } = await connectToDatabase();
-    const passwordDoc = await passwordsCollection.findOne({ _id: new ObjectId(id) });
+    // Filtrar por _id e userId
+    const passwordDoc = await passwordsCollection.findOne({ _id: new ObjectId(id), userId: userId });
 
     if (!passwordDoc) {
-      return NextResponse.json({ message: 'Password not found' }, { status: 404 });
+      return NextResponse.json({ message: 'Password not found or not owned by user' }, { status: 404 });
     }
     return NextResponse.json(fromMongo(passwordDoc as any), { status: 200 });
   } catch (error) {
@@ -28,27 +34,34 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
 }
 
 export async function PUT(request: NextRequest, { params }: { params: Params }) {
+  const userId = request.headers.get('X-User-ID');
+  if (!userId) {
+    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+  }
+
   try {
     const { id } = params;
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ message: 'Invalid ID format' }, { status: 400 });
     }
-    const updatedEntryData = (await request.json()) as PasswordEntry;
+    const updatedEntryData = (await request.json()) as Omit<PasswordEntry, 'id' | 'userId'>; // userId será setado abaixo
     
-    // Remove id field for MongoDB update, as _id is immutable or handled by the query
-    const { id: entryId, ...dataToUpdate } = updatedEntryData;
+    const dataToUpdate = { ...updatedEntryData, userId: userId }; // Garantir que o userId seja o do usuário logado
+     // Remover id do objeto se estiver presente, pois _id não deve estar no $set
+    const { id: entryId, ...setOperationData } = dataToUpdate;
+
 
     const { passwordsCollection } = await connectToDatabase();
     const result = await passwordsCollection.updateOne(
-      { _id: new ObjectId(id) },
-      { $set: dataToUpdate }
+      { _id: new ObjectId(id), userId: userId }, // Garantir que o usuário só atualize suas próprias senhas
+      { $set: setOperationData }
     );
 
     if (result.matchedCount === 0) {
-      return NextResponse.json({ message: 'Password not found' }, { status: 404 });
+      return NextResponse.json({ message: 'Password not found or not owned by user' }, { status: 404 });
     }
-    // Return the updated entry data as sent by the client, plus the original ID
-    return NextResponse.json({ ...dataToUpdate, id }, { status: 200 });
+    // Retorna o dado atualizado com o ID original
+    return NextResponse.json({ ...setOperationData, id }, { status: 200 });
   } catch (error) {
     console.error('Failed to update password:', error);
     return NextResponse.json({ message: 'Failed to update password' }, { status: 500 });
@@ -56,16 +69,22 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Params }) {
+  const userId = request.headers.get('X-User-ID');
+  if (!userId) {
+    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+  }
+
   try {
     const { id } = params;
     if (!ObjectId.isValid(id)) {
       return NextResponse.json({ message: 'Invalid ID format' }, { status: 400 });
     }
     const { passwordsCollection } = await connectToDatabase();
-    const result = await passwordsCollection.deleteOne({ _id: new ObjectId(id) });
+    // Garantir que o usuário só delete suas próprias senhas
+    const result = await passwordsCollection.deleteOne({ _id: new ObjectId(id), userId: userId });
 
     if (result.deletedCount === 0) {
-      return NextResponse.json({ message: 'Password not found' }, { status: 404 });
+      return NextResponse.json({ message: 'Password not found or not owned by user' }, { status: 404 });
     }
     return NextResponse.json({ message: 'Password deleted successfully' }, { status: 200 });
   } catch (error) {

@@ -3,24 +3,21 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import type { PasswordEntry } from '@/types';
 
-
 // Helper function from usePasswordManager, adapted for server-side
-const parseCSVToEntries = (csvText: string): Array<Omit<PasswordEntry, 'id'>> => {
+const parseCSVToEntries = (csvText: string): Array<Omit<PasswordEntry, 'id' | 'userId'>> => {
     const lines = csvText.split(/\r\n|\n/).filter(line => line.trim() !== '');
     if (lines.length === 0) {
-      return []; // Empty CSV or only whitespace lines
+      return [];
     }
     
     const headerLine = lines[0];
-    // Robust CSV parsing for headers, handling quoted headers with commas
     const headersFromFile = (headerLine.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)
       ?.map(h => h.startsWith('"') && h.endsWith('"') ? h.slice(1, -1).replace(/""/g, '"').trim() : h.trim())
       || headerLine.split(',').map(h => h.trim()));
 
     if (lines.length === 1 && headersFromFile.length > 0) {
-        return []; // Only header line
+        return [];
     }
-
 
     const lowercasedHeadersFromFile = headersFromFile.map(h => h.toLowerCase());
     const baseRequiredHeaders = ["nome", "login"];
@@ -34,17 +31,16 @@ const parseCSVToEntries = (csvText: string): Array<Omit<PasswordEntry, 'id'>> =>
         headerMap[originalHeader.toLowerCase()] = index;
     });
     
-    const entries: Array<Omit<PasswordEntry, 'id'>> = [];
+    const entries: Array<Omit<PasswordEntry, 'id' | 'userId'>> = [];
 
     for (let i = 1; i < lines.length; i++) {
-      // Robust CSV parsing for values, handling quoted values with commas
       const values = lines[i].match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)
                              ?.map(v => v.startsWith('"') && v.endsWith('"') ? v.slice(1, -1).replace(/""/g, '"') : v.trim())
                              || lines[i].split(',').map(v => v.trim());
       
-      if (values.length === 0 || (values.length === 1 && values[0] === '')) continue; // Skip empty or effectively empty lines
+      if (values.length === 0 || (values.length === 1 && values[0] === '')) continue;
 
-      const entry: Partial<Omit<PasswordEntry, 'id'>> & { customFields: Array<{label: string, value: string}> } = {
+      const entry: Partial<Omit<PasswordEntry, 'id' | 'userId'>> & { customFields: Array<{label: string, value: string}> } = {
         customFields: [],
       };
 
@@ -59,7 +55,6 @@ const parseCSVToEntries = (csvText: string): Array<Omit<PasswordEntry, 'id'>> =>
       }
       
       if (!entry.nome || !entry.login) {
-        // console.warn(`Linha ${i+1} ignorada: Nome ou Login ausentes.`); // Log server-side if needed
         continue;
       }
 
@@ -69,19 +64,22 @@ const parseCSVToEntries = (csvText: string): Array<Omit<PasswordEntry, 'id'>> =>
           entry.customFields.push({ label: originalHeader, value: values[index] });
         }
       });
-      entries.push(entry as Omit<PasswordEntry, 'id'>);
+      entries.push(entry as Omit<PasswordEntry, 'id' | 'userId'>);
     }
     return entries;
   };
-
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
+    const userId = formData.get('userId') as string | null; // Ler userId do formData
 
     if (!file) {
       return NextResponse.json({ message: 'No file uploaded' }, { status: 400 });
+    }
+    if (!userId) {
+      return NextResponse.json({ message: 'User ID not provided in form data' }, { status: 400 });
     }
 
     const fileText = await file.text();
@@ -92,27 +90,27 @@ export async function POST(request: NextRequest) {
     }
 
     const { passwordsCollection } = await connectToDatabase();
-    const existingPasswords = await passwordsCollection.find({}).project({ nome: 1, login: 1, _id: 0 }).toArray();
+    // Filtrar senhas existentes pelo userId para verificar duplicatas para este usuário
+    const existingPasswordsForUser = await passwordsCollection.find({ userId: userId }).project({ nome: 1, login: 1, _id: 0 }).toArray();
     
     const newEntriesToInsert: Array<Omit<PasswordEntry, 'id'>> = [];
 
     for (const entry of parsedEntriesFromFile) {
-        const isDuplicate = existingPasswords.some(existing => 
+        const isDuplicateForUser = existingPasswordsForUser.some(existing => 
             existing.nome === entry.nome && existing.login === entry.login
         );
-        if (!isDuplicate) {
+        if (!isDuplicateForUser) {
             newEntriesToInsert.push({
-                nome: entry.nome,
-                login: entry.login,
-                senha: entry.senha,
-                categoria: entry.categoria || '', // Ensure categoria exists
+                ...entry, // nome, login, senha, categoria, customFields
+                userId: userId, // Adicionar o userId do usuário logado
+                categoria: entry.categoria || '',
                 customFields: entry.customFields || []
             });
         }
     }
 
     if (newEntriesToInsert.length > 0) {
-      await passwordsCollection.insertMany(newEntriesToInsert);
+      await passwordsCollection.insertMany(newEntriesToInsert as any); // any para compatibilidade com Omit<PasswordEntry, 'id'>
     }
     
     return NextResponse.json({ importedCount: newEntriesToInsert.length }, { status: 200 });
