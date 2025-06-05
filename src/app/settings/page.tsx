@@ -136,7 +136,7 @@ export default function SettingsPage() {
     <div className="min-h-screen flex flex-col">
       <Header user={firebaseUser} onLogout={handleLogoutFirebase} />
       <main className="container mx-auto py-8 px-4 flex-grow">
-        <Button variant="default" asChild className="mb-6 bg-primary hover:bg-primary/90 text-primary-foreground">
+        <Button variant="ghost" asChild className="mb-6 text-primary hover:bg-primary/90 hover:text-primary-foreground">
           <Link href="/">
             <ArrowLeft size={18} className="mr-2" />
             Voltar para Início
