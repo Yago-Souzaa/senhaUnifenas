@@ -6,6 +6,22 @@ import type { PasswordEntry } from '@/types';
 
 const API_BASE_URL = '/api/passwords';
 
+async function parseErrorResponse(response: Response, defaultMessage: string): Promise<string> {
+  try {
+    const errorData = await response.json();
+    return errorData.message || defaultMessage;
+  } catch (e) {
+    // If response is not JSON, or JSON doesn't have a message, try to get text
+    try {
+        const textError = await response.text();
+        if (textError) return textError;
+    } catch (e) {
+        // Ignore error parsing text
+    }
+    return defaultMessage;
+  }
+}
+
 export function usePasswordManager(currentUserId?: string | null) { // currentUserId é o UID do Firebase
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -22,12 +38,12 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
     try {
       const response = await fetch(API_BASE_URL, {
         headers: {
-          'X-User-ID': currentUserId, // Usaremos o UID do Firebase aqui
+          'X-User-ID': currentUserId,
         }
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to fetch passwords: ${response.statusText}`);
+        const errorMessage = await parseErrorResponse(response, `Failed to fetch passwords: ${response.statusText}`);
+        throw new Error(errorMessage);
       }
       const data: PasswordEntry[] = await response.json();
       setPasswords(data);
@@ -63,12 +79,11 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to add password: ${response.statusText}`);
+        const errorMessage = await parseErrorResponse(response, `Failed to add password: ${response.statusText}`);
+        throw new Error(errorMessage);
       }
       const newPassword: PasswordEntry = await response.json();
       setPasswords(prev => [...prev, newPassword]);
-      // await fetchPasswords(); // Re-fetch or update locally
       return newPassword;
     } catch (err: any) {
       console.error("Failed to add password:", err);
@@ -103,8 +118,8 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to update password: ${response.statusText}`);
+        const errorMessage = await parseErrorResponse(response, `Failed to update password: ${response.statusText}`);
+        throw new Error(errorMessage);
       }
       const returnedEntry: PasswordEntry = await response.json();
       setPasswords(prev => prev.map(p => p.id === returnedEntry.id ? returnedEntry : p));
@@ -134,8 +149,8 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
         }
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to delete password: ${response.statusText}`);
+        const errorMessage = await parseErrorResponse(response, `Failed to delete password: ${response.statusText}`);
+        throw new Error(errorMessage);
       }
       setPasswords(prev => prev.filter(p => p.id !== id));
     } catch (err: any) {
@@ -158,17 +173,17 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('userId', currentUserId); // Add userId to form data
+      formData.append('userId', currentUserId);
       
       const response = await fetch(`${API_BASE_URL}/import`, {
         method: 'POST',
         body: formData,
-        headers: { // API Key or other auth might be needed if your API is protected beyond X-User-ID
-           'X-User-ID': currentUserId, // Still useful for direct identification on backend
+        headers: {
+           'X-User-ID': currentUserId,
         }
       });
 
-      const result = await response.json();
+      const result = await response.json(); // Assume result is always JSON here based on current API
 
       if (!response.ok) {
         throw new Error(result.message || `Failed to import passwords: ${response.statusText}`);
@@ -199,8 +214,8 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
         }
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to export passwords: ${response.statusText}`);
+        const errorMessage = await parseErrorResponse(response, `Failed to export passwords: ${response.statusText}`);
+        throw new Error(errorMessage);
       }
       
       const blob = await response.blob();
@@ -261,8 +276,8 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
         }
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Failed to clear passwords: ${response.statusText}`);
+        const errorMessage = await parseErrorResponse(response, `Failed to clear passwords: ${response.statusText}`);
+        throw new Error(errorMessage);
       }
       setPasswords([]);
     } catch (err: any) {
