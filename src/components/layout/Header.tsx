@@ -1,11 +1,12 @@
 
 import type { FirebaseUser } from '@/types';
-import { KeyRound, LogOut } from 'lucide-react';
+import { KeyRound, LogOut, Settings } from 'lucide-react'; // Importado Settings
 import { Button } from '@/components/ui/button';
+import Link from 'next/link'; // Importado Link
 
 interface HeaderProps {
   user: FirebaseUser | null;
-  onLogout?: () => void; // Tornar opcional, pode não haver logout em todas as telas
+  onLogout?: () => void;
 }
 
 export function Header({ user, onLogout }: HeaderProps) {
@@ -16,13 +17,23 @@ export function Header({ user, onLogout }: HeaderProps) {
           <KeyRound size={32} />
           <h1 className="text-3xl font-headline font-bold">SenhaFacil</h1>
         </div>
-        {user && onLogout && (
-          <div className="flex items-center gap-3">
+        {user && ( // Modificado para agrupar lógica do usuário
+          <div className="flex items-center gap-2 sm:gap-3">
             <span className="text-sm hidden sm:inline">{user.email}</span>
-            <Button variant="ghost" size="sm" onClick={onLogout} className="hover:bg-primary/80 text-primary-foreground">
-              <LogOut size={18} className="mr-1 sm:mr-2" />
-              Sair
+            
+            <Button variant="ghost" size="icon" asChild className="hover:bg-primary/80 text-primary-foreground h-8 w-8 sm:h-9 sm:w-auto sm:px-3">
+              <Link href="/settings" title="Configurações da Conta">
+                <Settings size={18} className="sm:mr-0 md:mr-1" />
+                <span className="sr-only sm:hidden md:inline hidden">Config.</span>
+              </Link>
             </Button>
+
+            {onLogout && (
+              <Button variant="ghost" size="sm" onClick={onLogout} className="hover:bg-primary/80 text-primary-foreground h-8 px-2 sm:h-9 sm:px-3">
+                <LogOut size={18} className="mr-1 sm:mr-2" />
+                Sair
+              </Button>
+            )}
           </div>
         )}
       </div>
