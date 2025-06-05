@@ -78,7 +78,7 @@ export function PasswordList({ passwords, isLoading, onEdit, onDelete, searchTer
   return (
     <div className="space-y-4">
       {passwords.map(entry => (
-        <PasswordListItem key={entry.id} entry={entry} onEdit={onEdit} onDelete={onDelete} />
+        <PasswordListItem key={entry.id} entry={entry} onEdit={onEdit} onDelete={onDelete} activeTab={activeTab} />
       ))}
     </div>
   );

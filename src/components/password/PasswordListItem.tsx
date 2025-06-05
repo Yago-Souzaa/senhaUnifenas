@@ -33,9 +33,10 @@ interface PasswordListItemProps {
   entry: PasswordEntry;
   onEdit: (entry: PasswordEntry) => void;
   onDelete: (id: string) => void;
+  activeTab: string;
 }
 
-export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemProps) {
+export function PasswordListItem({ entry, onEdit, onDelete, activeTab }: PasswordListItemProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const { toast } = useToast();
@@ -57,6 +58,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
       });
   };
   
+  const shouldShowCategoryBadge = entry.categoria && (activeTab === 'Todas' || activeTab.toLowerCase() !== entry.categoria.toLowerCase());
 
   return (
     <Card className="mb-3 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-md">
@@ -85,7 +87,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
               </div>
             </div>
           </div>
-          {entry.categoria && (
+          {shouldShowCategoryBadge && (
             <div className="flex items-center mt-0.5">
               <Badge variant="secondary" className="text-xs py-0.5 px-1.5">
                 <FolderKanban size={12} className="mr-1"/> {entry.categoria}
