@@ -6,7 +6,7 @@ import type { PasswordEntry } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban } from 'lucide-react';
+import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban, EllipsisVertical } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,6 +18,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
@@ -54,10 +61,9 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
   return (
     <Card className="mb-3 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-md">
       <CardHeader className="py-3 px-4 flex flex-row justify-between items-start gap-3">
-        {/* Seção Esquerda: Título, Categoria */}
         <div className="flex-grow min-w-0">
           <div className="flex items-start justify-between">
-            <div className="min-w-0"> {/* Para truncar o título */}
+            <div className="min-w-0"> 
               <div className="flex items-center">
                 <CardTitle className="font-headline text-lg text-primary truncate mr-1" title={entry.nome}>
                   {entry.nome}
@@ -80,7 +86,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
             </div>
           </div>
           {entry.categoria && (
-            <div className="flex items-center mt-0.5"> {/* Categoria abaixo do título */}
+            <div className="flex items-center mt-0.5">
               <Badge variant="secondary" className="text-xs py-0.5 px-1.5">
                 <FolderKanban size={12} className="mr-1"/> {entry.categoria}
               </Badge>
@@ -102,17 +108,32 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
           )}
         </div>
 
-        {/* Seção Direita: Botões de Ação */}
-        <div className="flex items-center gap-2 shrink-0">
-          <Button variant="outline" size="sm" onClick={() => onEdit(entry)} className="text-xs h-8 px-3 hover:bg-secondary">
-            <Edit2 size={14} className="mr-1.5" /> Editar
-          </Button>
+        <div className="flex items-center gap-1 shrink-0">
           <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" size="sm" className="text-xs h-8 px-3 hover:bg-destructive/90">
-                <Trash2 size={14} className="mr-1.5" /> Deletar
-              </Button>
-            </AlertDialogTrigger>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-secondary">
+                  <EllipsisVertical size={18} />
+                  <span className="sr-only">Mais ações</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onEdit(entry)} className="cursor-pointer">
+                  <Edit2 size={16} className="mr-2" />
+                  Editar
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <AlertDialogTrigger asChild>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                    onSelect={(e) => e.preventDefault()} // Evita fechar o dropdown ao clicar para abrir o AlertDialog
+                  >
+                    <Trash2 size={16} className="mr-2" />
+                    Deletar
+                  </DropdownMenuItem>
+                </AlertDialogTrigger>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
