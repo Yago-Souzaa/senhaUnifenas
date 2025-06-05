@@ -68,7 +68,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
                   onClick={() => handleCopy(entry.nome, "Nome", `nome-${entry.id}`)}
                   className={cn(
                     "h-6 w-6 shrink-0 transition-transform duration-150",
-                    copiedField === `nome-${entry.id}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent'
+                    copiedField === `nome-${entry.id}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
                   )}
                   aria-label="Copiar Nome"
                 >
@@ -76,7 +76,6 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
                 </Button>
               </div>
             </div>
-            {/* Ícone de Força removido daqui */}
           </div>
           {entry.categoria && (
             <div className="flex items-center mt-0.5"> {/* Categoria abaixo do título */}
@@ -89,7 +88,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
                 onClick={() => handleCopy(entry.categoria, "Categoria", `categoria-${entry.id}`)}
                 className={cn(
                   "h-5 w-5 ml-1 shrink-0 transition-transform duration-150",
-                  copiedField === `categoria-${entry.id}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent'
+                  copiedField === `categoria-${entry.id}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
                 )}
                 aria-label="Copiar Categoria"
               >
@@ -137,7 +136,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
               onClick={() => handleCopy(entry.login, "Login", `login-${entry.id}`)}
               className={cn(
                 "h-7 w-7 ml-1 shrink-0 transition-transform duration-150",
-                copiedField === `login-${entry.id}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent'
+                copiedField === `login-${entry.id}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
               aria-label="Copiar Login"
             >
@@ -153,7 +152,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
               variant="ghost"
               size="icon"
               onClick={() => setShowPassword(!showPassword)}
-              className="h-7 w-7 ml-1 shrink-0 text-muted-foreground hover:text-accent"
+              className="h-7 w-7 ml-1 shrink-0 text-muted-foreground hover:text-foreground"
               aria-label={showPassword ? "Esconder Senha" : "Mostrar Senha"}
             >
               {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -164,7 +163,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
               onClick={() => handleCopy(entry.senha, "Senha", `senha-${entry.id}`)}
               className={cn(
                 "h-7 w-7 ml-1 shrink-0 transition-transform duration-150",
-                copiedField === `senha-${entry.id}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent'
+                copiedField === `senha-${entry.id}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
               )}
               aria-label="Copiar Senha"
             >
@@ -184,7 +183,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
                       onClick={() => handleCopy(field.value, `Valor de "${field.label}"`, `customFieldValue-${entry.id}-${index}`)}
                       className={cn(
                         "h-6 w-6 shrink-0 transition-transform duration-150",
-                        copiedField === `customFieldValue-${entry.id}-${index}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-accent'
+                        copiedField === `customFieldValue-${entry.id}-${index}` ? 'scale-110 bg-accent text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
                       )}
                       aria-label={`Copiar valor do campo ${field.label}`}
                     >
