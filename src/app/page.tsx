@@ -486,16 +486,16 @@ export default function HomePage() {
         ) : (
           <>
             {showSecurityNotice && (
-              <div className="mb-6 p-4 border border-yellow-300 bg-yellow-50 rounded-md shadow relative">
+              <div className="mb-6 p-4 border bg-card rounded-lg shadow-lg relative">
                   <div className="flex items-start">
-                      <ShieldAlert className="h-6 w-6 text-yellow-600 mr-3 shrink-0" />
+                      <ShieldAlert className="h-6 w-6 text-primary mr-3 shrink-0" />
                       <div className="flex-grow">
-                          <h3 className="text-md font-semibold text-yellow-800 font-headline">Aviso de Segurança</h3>
-                          <p className="text-sm text-yellow-700">
+                          <h3 className="text-md font-semibold text-card-foreground font-headline">Aviso de Segurança</h3>
+                          <p className="text-sm text-muted-foreground">
                               Este aplicativo agora armazena senhas em um banco de dados central. Certifique-se de que o acesso ao banco de dados e à aplicação esteja devidamente protegido conforme as políticas da sua intranet. As senhas são associadas ao seu email de login.
                           </p>
                       </div>
-                      <Button variant="ghost" size="icon" onClick={() => setShowSecurityNotice(false)} className="ml-2 h-6 w-6 text-yellow-600 hover:text-yellow-800 absolute top-2 right-2">
+                      <Button variant="ghost" size="icon" onClick={() => setShowSecurityNotice(false)} className="ml-2 h-6 w-6 text-muted-foreground hover:text-foreground absolute top-3 right-3">
                           <XCircle size={18} />
                       </Button>
                   </div>
@@ -579,7 +579,7 @@ export default function HomePage() {
                                     variant="ghost"
                                     size="icon"
                                     className="absolute top-1/2 right-0.5 -translate-y-1/2 h-5 w-5 opacity-0 group-hover:opacity-100 hover:bg-destructive/20"
-                                    title={`Excluir categoria ${category}`}
+                                    
                                   >
                                     <div
                                       role="button"
@@ -598,6 +598,7 @@ export default function HomePage() {
                                           setIsDeleteCategoryDialogOpen(true);
                                         }
                                       }}
+                                      title={`Excluir categoria ${category}`}
                                     >
                                       <X size={12} className="text-destructive/80 hover:text-destructive" />
                                     </div>
