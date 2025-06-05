@@ -6,7 +6,7 @@ import type { PasswordEntry } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Copy, Edit2, Trash2, ShieldCheck, ShieldAlert, FolderKanban } from 'lucide-react';
+import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,34 +50,11 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
       });
   };
   
-  const passwordStrength = (password?: string): 'strong' | 'medium' | 'weak' => {
-    if (!password || password.length === 0) return 'weak';
-    const length = password.length;
-    const hasUpper = /[A-Z]/.test(password);
-    const hasLower = /[a-z]/.test(password);
-    const hasNumber = /[0-9]/.test(password);
-    const hasSymbol = /[^A-Za-z0-9]/.test(password);
-
-    let score = 0;
-    if (length >= 12) score += 2;
-    else if (length >= 8) score += 1;
-    
-    if (hasUpper) score +=1;
-    if (hasLower) score +=1;
-    if (hasNumber) score +=1;
-    if (hasSymbol) score +=1;
-
-    if (score >= 5) return 'strong';
-    if (score >= 3) return 'medium';
-    return 'weak';
-  };
-
-  const strength = passwordStrength(entry.senha);
 
   return (
     <Card className="mb-3 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-md">
       <CardHeader className="py-3 px-4 flex flex-row justify-between items-start gap-3">
-        {/* Seção Esquerda: Título, Categoria, Ícone de Força */}
+        {/* Seção Esquerda: Título, Categoria */}
         <div className="flex-grow min-w-0">
           <div className="flex items-start justify-between">
             <div className="min-w-0"> {/* Para truncar o título */}
@@ -99,11 +76,7 @@ export function PasswordListItem({ entry, onEdit, onDelete }: PasswordListItemPr
                 </Button>
               </div>
             </div>
-            <div className="shrink-0 flex items-center ml-2"> {/* Ícone de Força */}
-              {strength === 'strong' && <ShieldCheck className="text-green-500" size={20} />}
-              {strength === 'medium' && <ShieldAlert className="text-yellow-500" size={20} />}
-              {strength === 'weak' && <ShieldAlert className="text-red-500" size={20} />}
-            </div>
+            {/* Ícone de Força removido daqui */}
           </div>
           {entry.categoria && (
             <div className="flex items-center mt-0.5"> {/* Categoria abaixo do título */}
