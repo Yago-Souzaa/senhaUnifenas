@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { usePasswordManager } from '@/hooks/usePasswordManager';
 import type { PasswordEntry } from '@/types';
 import { Header } from '@/components/layout/Header';
@@ -13,12 +13,14 @@ import { ClearAllPasswordsDialog } from '@/components/password/ClearAllPasswords
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown } from 'lucide-react';
+import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, XCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export default function HomePage() {
   const { 
     passwords, 
     isLoading, 
+    error: passwordManagerError, // Get error from hook
     addPassword, 
     updatePassword, 
     deletePassword, 
@@ -35,38 +37,50 @@ export default function HomePage() {
   const [isClearAllDialogOpen, setIsClearAllDialogOpen] = useState(false);
   const [editingPassword, setEditingPassword] = useState<PasswordEntry | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showSecurityNotice, setShowSecurityNotice] = useState(true);
 
-  const handleAddPassword = (data: PasswordFormValues) => {
+
+  const handleAddPassword = async (data: PasswordFormValues) => {
     const entryToAdd: Omit<PasswordEntry, 'id'> = {
       nome: data.nome,
       login: data.login,
       senha: data.senha,
+      categoria: data.categoria,
       customFields: data.customFields || [],
     };
-    addPassword(entryToAdd);
-    toast({ title: "Sucesso!", description: `Senha para "${data.nome}" adicionada.` });
+    try {
+      await addPassword(entryToAdd);
+      toast({ title: "Sucesso!", description: `Senha para "${data.nome}" adicionada.` });
+    } catch (e: any) {
+      toast({ title: "Erro ao Adicionar", description: e.message || "Não foi possível adicionar a senha.", variant: "destructive" });
+    }
   };
 
-  const handleUpdatePassword = (data: PasswordFormValues, id: string) => {
+  const handleUpdatePassword = async (data: PasswordFormValues, id: string) => {
     const entryToUpdate: PasswordEntry = {
       id,
       nome: data.nome,
       login: data.login,
       senha: data.senha,
+      categoria: data.categoria,
       customFields: data.customFields || [],
     };
-    updatePassword(entryToUpdate);
-    toast({ title: "Sucesso!", description: `Senha para "${data.nome}" atualizada.` });
+    try {
+      await updatePassword(entryToUpdate);
+      toast({ title: "Sucesso!", description: `Senha para "${data.nome}" atualizada.` });
+    } catch (e: any) {
+      toast({ title: "Erro ao Atualizar", description: e.message || "Não foi possível atualizar a senha.", variant: "destructive" });
+    }
   };
 
-  const handleSubmitPasswordForm = (data: PasswordFormValues, id?: string) => {
+  const handleSubmitPasswordForm = async (data: PasswordFormValues, id?: string) => {
     if (id) {
-      handleUpdatePassword(data, id);
+      await handleUpdatePassword(data, id);
     } else {
-      handleAddPassword(data);
+      await handleAddPassword(data);
     }
     setEditingPassword(null);
-    setIsAddEditDialogOpen(false); // Close dialog after submit
+    setIsAddEditDialogOpen(false); 
   };
 
   const handleEditPassword = (entry: PasswordEntry) => {
@@ -74,35 +88,53 @@ export default function HomePage() {
     setIsAddEditDialogOpen(true);
   };
 
-  const handleDeletePassword = (id: string) => {
+  const handleDeletePassword = async (id: string) => {
     const entryToDelete = passwords.find(p => p.id === id);
-    deletePassword(id);
-    if (entryToDelete) {
-      toast({ title: "Sucesso!", description: `Senha para "${entryToDelete.nome}" deletada.`, variant: "destructive" });
+    try {
+      await deletePassword(id);
+      if (entryToDelete) {
+        toast({ title: "Sucesso!", description: `Senha para "${entryToDelete.nome}" deletada.`, variant: "destructive" });
+      }
+    } catch (e: any) {
+      toast({ title: "Erro ao Deletar", description: e.message || "Não foi possível deletar a senha.", variant: "destructive" });
     }
   };
 
-  const handleImport = (entries: Array<Omit<PasswordEntry, 'id'>>) => {
-    const imported = importPasswordsHook(entries);
-    if (imported.length > 0) {
-         toast({ title: "Importação Concluída", description: `${imported.length} novas senhas importadas com sucesso.` });
-    } else {
-         toast({ title: "Nenhuma Nova Senha", description: "Nenhuma senha nova foi importada. Podem ser duplicatas ou o arquivo estar vazio.", variant: "default" });
+  // Updated to use the new hook return type
+  const handleImport = async (file: File) => {
+    if (!file) {
+      toast({ title: "Nenhum arquivo", description: "Por favor, selecione um arquivo para importar.", variant: "destructive" });
+      return;
+    }
+    try {
+      const result = await importPasswordsHook(file);
+      if (result.importedCount > 0) {
+           toast({ title: "Importação Concluída", description: `${result.importedCount} novas senhas importadas com sucesso.` });
+      } else {
+           toast({ title: "Nenhuma Nova Senha", description: result.message || "Nenhuma senha nova foi importada. Podem ser duplicatas ou o arquivo estar vazio.", variant: "default" });
+      }
+      setIsImportDialogOpen(false); // Close dialog on success/handled case
+    } catch (e: any) {
+         toast({ title: "Erro na Importação", description: e.message || "Falha ao processar o arquivo CSV.", variant: "destructive" });
     }
   };
   
-  const handleClearAllPasswords = () => {
-    clearAllPasswords();
-    toast({ title: "Tudo Limpo!", description: "Todas as senhas foram removidas.", variant: "destructive" });
-    setIsClearAllDialogOpen(false);
+  const handleClearAllPasswords = async () => {
+    try {
+      await clearAllPasswords();
+      toast({ title: "Tudo Limpo!", description: "Todas as senhas foram removidas.", variant: "destructive" });
+      setIsClearAllDialogOpen(false);
+    } catch (e: any) {
+      toast({ title: "Erro ao Limpar", description: e.message || "Não foi possível limpar todas as senhas.", variant: "destructive" });
+    }
   };
 
-  const handleExportPasswords = () => {
+  const handleExportPasswords = async () => {
     if (passwords.length === 0) {
       toast({ title: "Nada para Exportar", description: "Não há senhas para exportar.", variant: "default" });
       return;
     }
-    const success = exportPasswordsToCSV();
+    const success = await exportPasswordsToCSV();
     if (success) {
       toast({ title: "Exportado!", description: "Suas senhas foram exportadas para senhas_backup.csv." });
     } else {
@@ -114,17 +146,32 @@ export default function HomePage() {
     <div className="min-h-screen flex flex-col">
       <Header />
       <main className="container mx-auto py-8 px-4 flex-grow">
-        <div className="mb-6 p-4 border border-yellow-300 bg-yellow-50 rounded-md shadow">
-            <div className="flex items-center">
-                <ShieldAlert className="h-6 w-6 text-yellow-600 mr-3" />
-                <div>
-                    <h3 className="text-md font-semibold text-yellow-800 font-headline">Aviso de Segurança</h3>
-                    <p className="text-sm text-yellow-700">
-                        Este aplicativo armazena senhas localmente no seu navegador. Para maior segurança, use senhas mestras fortes e considere gerenciadores de senha com criptografia ponta-a-ponta para dados críticos. Não use em computadores compartilhados.
-                    </p>
-                </div>
-            </div>
-        </div>
+        {showSecurityNotice && (
+          <div className="mb-6 p-4 border border-yellow-300 bg-yellow-50 rounded-md shadow relative">
+              <div className="flex items-start">
+                  <ShieldAlert className="h-6 w-6 text-yellow-600 mr-3 shrink-0" />
+                  <div className="flex-grow">
+                      <h3 className="text-md font-semibold text-yellow-800 font-headline">Aviso de Segurança</h3>
+                      <p className="text-sm text-yellow-700">
+                          Este aplicativo agora armazena senhas em um banco de dados central. Certifique-se de que o acesso ao banco de dados e à aplicação esteja devidamente protegido conforme as políticas da sua intranet.
+                      </p>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => setShowSecurityNotice(false)} className="ml-2 h-6 w-6 text-yellow-600 hover:text-yellow-800 absolute top-2 right-2">
+                      <XCircle size={18} />
+                  </Button>
+              </div>
+          </div>
+        )}
+
+        {passwordManagerError && (
+          <Alert variant="destructive" className="mb-4">
+            <ShieldAlert className="h-5 w-5" />
+            <AlertTitle>Erro de Conexão</AlertTitle>
+            <AlertDescription>
+              {passwordManagerError} Verifique a conexão com o banco de dados ou as configurações da API.
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="mb-8 p-6 bg-card rounded-lg shadow-md">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
@@ -171,7 +218,7 @@ export default function HomePage() {
         isOpen={isAddEditDialogOpen}
         onOpenChange={(open) => {
           setIsAddEditDialogOpen(open);
-          if (!open) setEditingPassword(null); // Clear editing state when dialog closes
+          if (!open) setEditingPassword(null);
         }}
         onSubmit={handleSubmitPasswordForm}
         initialData={editingPassword}

@@ -3,98 +3,174 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { PasswordEntry } from '@/types';
-import { v4 as uuidv4 } from 'uuid'; // For generating unique IDs
+// v4 as uuidv4 is no longer needed as MongoDB generates IDs
 
-const STORAGE_KEY = 'senhaFacilPasswords';
-
-// Helper to migrate old data if necessary
-const migrateOldEntry = (entry: any): PasswordEntry => {
-  const newEntry: PasswordEntry = {
-    id: entry.id,
-    nome: entry.nome,
-    login: entry.login,
-    senha: entry.senha,
-    categoria: entry.categoria || '', // Adiciona categoria, default para string vazia se não existir
-    customFields: entry.customFields || [],
-  };
-
-  // Lógica de migração de campos legados para customFields (se aplicável em versões futuras)
-  // const oldFieldsToMigrate: Array<{ oldKey: string; label: string }> = [
-  //   { oldKey: 'ip', label: 'IP' },
-  // ];
-  // oldFieldsToMigrate.forEach(({ oldKey, label }) => {
-  //   if (entry[oldKey] && !newEntry.customFields?.some(cf => cf.label === label)) {
-  //     newEntry.customFields?.push({ label, value: entry[oldKey] });
-  //   }
-  // });
-
-  return newEntry;
-};
-
+const API_BASE_URL = '/api/passwords';
 
 export function usePasswordManager() {
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchPasswords = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(API_BASE_URL);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to fetch passwords: ${response.statusText}`);
+      }
+      const data: PasswordEntry[] = await response.json();
+      setPasswords(data);
+    } catch (err: any) {
+      console.error("Failed to load passwords:", err);
+      setError(err.message || 'An unknown error occurred while fetching passwords.');
+      setPasswords([]); // Clear passwords on error
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
+    fetchPasswords();
+  }, [fetchPasswords]);
+
+  const addPassword = useCallback(async (entryData: Omit<PasswordEntry, 'id'>) => {
+    setIsLoading(true);
+    setError(null);
     try {
-      const storedPasswordsJson = localStorage.getItem(STORAGE_KEY);
-      if (storedPasswordsJson) {
-        const storedPasswordsRaw = JSON.parse(storedPasswordsJson);
-        const migratedPasswords = storedPasswordsRaw.map(migrateOldEntry);
-        setPasswords(migratedPasswords);
+      const response = await fetch(API_BASE_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(entryData),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to add password: ${response.statusText}`);
       }
-    } catch (error) {
-      console.error("Failed to load passwords from local storage:", error);
+      const newPassword: PasswordEntry = await response.json();
+      setPasswords(prev => [...prev, newPassword]); // Optimistic update possible here too
+      await fetchPasswords(); // Re-fetch to ensure consistency
+      return newPassword;
+    } catch (err: any) {
+      console.error("Failed to add password:", err);
+      setError(err.message || 'An unknown error occurred while adding password.');
+      throw err; // Re-throw to be caught by caller for toast messages
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
-  }, []);
+  }, [fetchPasswords]);
 
-  const savePasswords = useCallback((updatedPasswords: PasswordEntry[]) => {
+  const updatePassword = useCallback(async (updatedEntry: PasswordEntry) => {
+    setIsLoading(true);
+    setError(null);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(updatedPasswords));
-      setPasswords(updatedPasswords);
-    } catch (error) {
-      console.error("Failed to save passwords to local storage:", error);
+      const response = await fetch(`${API_BASE_URL}/${updatedEntry.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedEntry),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to update password: ${response.statusText}`);
+      }
+      const returnedEntry: PasswordEntry = await response.json();
+      setPasswords(prev => prev.map(p => p.id === returnedEntry.id ? returnedEntry : p));
+      // await fetchPasswords(); // Re-fetch or update locally
+      return returnedEntry;
+    } catch (err: any) {
+      console.error("Failed to update password:", err);
+      setError(err.message || 'An unknown error occurred while updating password.');
+      throw err;
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
-  const addPassword = useCallback((entryData: Omit<PasswordEntry, 'id'>) => {
-    const newPassword: PasswordEntry = { ...entryData, id: uuidv4() };
-    const updatedPasswords = [...passwords, newPassword];
-    savePasswords(updatedPasswords);
-    return newPassword;
-  }, [passwords, savePasswords]);
-
-  const updatePassword = useCallback((updatedEntry: PasswordEntry) => {
-    const updatedPasswords = passwords.map(p => p.id === updatedEntry.id ? updatedEntry : p);
-    savePasswords(updatedPasswords);
-    return updatedEntry;
-  }, [passwords, savePasswords]);
-
-  const deletePassword = useCallback((id: string) => {
-    const updatedPasswords = passwords.filter(p => p.id !== id);
-    savePasswords(updatedPasswords);
-  }, [passwords, savePasswords]);
-
-  const importPasswords = useCallback((entriesFromFile: Array<Omit<PasswordEntry, 'id'>>) => {
-    const newEntriesWithId = entriesFromFile.map(entry => ({
-        ...entry,
-        id: uuidv4(),
-        categoria: entry.categoria || '', // Garante que categoria exista
-    }));
-    
-    const uniqueNewEntries = newEntriesWithId.filter(newEntry => 
-      !passwords.some(existing => existing.nome === newEntry.nome && existing.login === newEntry.login)
-    );
-    
-    if (uniqueNewEntries.length > 0) {
-      const updatedPasswords = [...passwords, ...uniqueNewEntries];
-      savePasswords(updatedPasswords);
+  const deletePassword = useCallback(async (id: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/${id}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to delete password: ${response.statusText}`);
+      }
+      setPasswords(prev => prev.filter(p => p.id !== id));
+      // await fetchPasswords(); // Re-fetch or update locally
+    } catch (err: any) {
+      console.error("Failed to delete password:", err);
+      setError(err.message || 'An unknown error occurred while deleting password.');
+      throw err;
+    } finally {
+      setIsLoading(false);
     }
-    return uniqueNewEntries; 
-  }, [passwords, savePasswords]);
+  }, []);
+
+  // Import is now handled by an API endpoint. The hook provides a function to call that endpoint.
+  const importPasswords = useCallback(async (file: File): Promise<{ importedCount: number, message?: string }> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const response = await fetch(`${API_BASE_URL}/import`, {
+        method: 'POST',
+        body: formData, // No Content-Type header needed, browser sets it for FormData
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || `Failed to import passwords: ${response.statusText}`);
+      }
+      
+      await fetchPasswords(); // Refresh the list after import
+      return { importedCount: result.importedCount, message: result.message };
+    } catch (err: any) {
+      console.error("Failed to import passwords:", err);
+      setError(err.message || 'An unknown error occurred during import.');
+      throw err; // Re-throw for UI handling
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchPasswords]);
   
+  // Export is now handled by an API endpoint. This function triggers the download.
+  const exportPasswordsToCSV = useCallback(async (): Promise<boolean> => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/export`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to export passwords: ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "senhas_backup.csv";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      return true;
+    } catch (err: any) {
+      console.error("Failed to export passwords:", err);
+      setError(err.message || 'An unknown error occurred during export.');
+      // No throw here, let the UI handle toast based on boolean
+      return false; 
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   const generatePassword = useCallback((length: number, useUppercase: boolean, useLowercase: boolean, useNumbers: boolean, useSymbols: boolean): string => {
     const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const lower = "abcdefghijklmnopqrstuvwxyz";
@@ -118,73 +194,34 @@ export function usePasswordManager() {
     return newPassword;
   }, []);
 
-  const clearAllPasswords = useCallback(() => {
-    savePasswords([]);
-  }, [savePasswords]);
+  const clearAllPasswords = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/clear`, {
+        method: 'POST', // Use POST for destructive operations
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `Failed to clear passwords: ${response.statusText}`);
+      }
+      setPasswords([]);
+      // await fetchPasswords(); // Re-fetch or update locally
+    } catch (err: any) {
+      console.error("Failed to clear passwords:", err);
+      setError(err.message || 'An unknown error occurred while clearing passwords.');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
-  const escapeCSVField = (field?: string): string => {
-    if (field === null || typeof field === 'undefined') {
-      return '""'; 
-    }
-    const stringField = String(field);
-    if (stringField.includes(',') || stringField.includes('\n') || stringField.includes('"')) {
-      return `"${stringField.replace(/"/g, '""')}"`;
-    }
-    return `"${stringField}"`; 
-  };
-  
-  const exportPasswordsToCSV = useCallback(() => {
-    if (passwords.length === 0) {
-      return false;
-    }
-
-    const fixedHeaders = ["nome", "login", "senha", "categoria"]; // Adiciona categoria aqui
-    
-    const customFieldLabels = new Set<string>();
-    passwords.forEach(p => {
-      p.customFields?.forEach(cf => customFieldLabels.add(cf.label));
-    });
-    const sortedCustomFieldLabels = Array.from(customFieldLabels).sort();
-
-    const allHeaders = [...fixedHeaders, ...sortedCustomFieldLabels];
-    
-    const csvRows = [
-      allHeaders.map(escapeCSVField).join(','), 
-      ...passwords.map(p => {
-        const row = [
-          escapeCSVField(p.nome),
-          escapeCSVField(p.login),
-          escapeCSVField(p.senha),
-          escapeCSVField(p.categoria), // Adiciona valor da categoria
-        ];
-        sortedCustomFieldLabels.forEach(label => {
-          const customField = p.customFields?.find(cf => cf.label === label);
-          row.push(escapeCSVField(customField?.value));
-        });
-        return row.join(',');
-      })
-    ];
-    const csvString = csvRows.join('\r\n');
-    
-    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
-    if (link.download !== undefined) {
-        const url = URL.createObjectURL(blob);
-        link.setAttribute("href", url);
-        link.setAttribute("download", "senhas_backup.csv");
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        return true;
-    }
-    return false;
-  }, [passwords]);
 
   return {
     passwords,
     isLoading,
+    error, // Expose error state to UI
+    fetchPasswords, // Expose fetch for manual refresh if needed
     addPassword,
     updatePassword,
     deletePassword,
