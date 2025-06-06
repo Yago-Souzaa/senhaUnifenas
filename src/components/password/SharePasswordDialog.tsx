@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { UserPlus, Users, ListChecks, Edit3, Trash2, AlertCircle } from 'lucide-react';
+import { UserPlus, Users, ListChecks, Trash2, AlertCircle, KeyRound } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 
@@ -53,7 +53,6 @@ export function SharePasswordDialog({
   const { toast } = useToast();
 
   useEffect(() => {
-    // Reset form when dialog opens or passwordEntry changes
     if (isOpen) {
       setUserIdToShareWith('');
       setPermission('read');
@@ -63,12 +62,12 @@ export function SharePasswordDialog({
 
   if (!passwordEntry) return null;
 
-  const effectiveOwnerId = passwordEntry.ownerId || passwordEntry.userId; // Considera o userId legado
+  const effectiveOwnerId = passwordEntry.ownerId || passwordEntry.userId;
   const isOwner = !!currentUserId && effectiveOwnerId === currentUserId;
 
   const handleAddShare = async () => {
     if (!userIdToShareWith.trim()) {
-      toast({ title: "Entrada Inválida", description: "Por favor, insira o ID do usuário para compartilhar.", variant: "destructive" });
+      toast({ title: "Entrada Inválida", description: "Por favor, insira o ID do usuário (Firebase UID) para compartilhar.", variant: "destructive" });
       return;
     }
     if (userIdToShareWith.trim() === currentUserId) {
@@ -83,8 +82,8 @@ export function SharePasswordDialog({
     setIsSubmitting(true);
     try {
       await onSharePassword(passwordEntry.id, userIdToShareWith.trim(), permission);
-      toast({ title: "Sucesso!", description: `Senha compartilhada com ${userIdToShareWith.trim()}.` });
-      setUserIdToShareWith(''); // Clear input
+      toast({ title: "Sucesso!", description: `Senha compartilhada com o usuário.` });
+      setUserIdToShareWith(''); 
     } catch (error: any) {
       toast({ title: "Erro ao Compartilhar", description: error.message || "Não foi possível adicionar o compartilhamento.", variant: "destructive" });
     } finally {
@@ -97,7 +96,7 @@ export function SharePasswordDialog({
     setIsSubmitting(true);
     try {
       await onUpdateShare(passwordEntry.id, sharedUser.userId, newPermission);
-      toast({ title: "Permissão Atualizada", description: `Permissão para ${sharedUser.userId} atualizada.` });
+      toast({ title: "Permissão Atualizada", description: `Permissão para o usuário atualizada.` });
     } catch (error: any) {
       toast({ title: "Erro ao Atualizar", description: error.message || "Não foi possível atualizar a permissão.", variant: "destructive" });
     } finally {
@@ -109,7 +108,7 @@ export function SharePasswordDialog({
     setIsSubmitting(true);
     try {
       await onRemoveShare(passwordEntry.id, sharedUserIdToRemove);
-      toast({ title: "Compartilhamento Removido", description: `Compartilhamento com ${sharedUserIdToRemove} removido.` });
+      toast({ title: "Compartilhamento Removido", description: `Compartilhamento com o usuário removido.` });
     } catch (error: any) {
       toast({ title: "Erro ao Remover", description: error.message || "Não foi possível remover o compartilhamento.", variant: "destructive" });
     } finally {
@@ -118,8 +117,14 @@ export function SharePasswordDialog({
   };
   
   const getPermissionDisplay = (perm: 'read' | 'full') => {
-    return perm === 'full' ? 'Total' : 'Leitura';
+    return perm === 'full' ? 'Total (Editar/Excluir)' : 'Leitura';
   };
+
+  const getSharedByDisplay = (sharedBy?: string) => {
+    if (!sharedBy) return 'N/A';
+    if (sharedBy === currentUserId) return 'Você';
+    return `UID: ...${sharedBy.slice(-6)}`; // Mostra os últimos 6 caracteres do UID para breve identificação
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!isSubmitting) onOpenChange(open); }}>
@@ -129,9 +134,10 @@ export function SharePasswordDialog({
             <Users size={22}/> Compartilhar Senha
           </DialogTitle>
           <DialogDescription>
-            "{passwordEntry.nome}"<br />
+            <span className="font-semibold">"{passwordEntry.nome}"</span>
+            <br />
             {isOwner
-              ? "Gerencie com quem esta senha é compartilhada. O ID do usuário geralmente é o UID do Firebase."
+              ? "Gerencie com quem esta senha é compartilhada. Peça ao outro usuário para fornecer o seu ID do Firebase (UID)."
               : "Você tem acesso a esta senha porque ela foi compartilhada com você."}
           </DialogDescription>
         </DialogHeader>
@@ -151,6 +157,9 @@ export function SharePasswordDialog({
                     className="mt-1 h-9"
                     disabled={isSubmitting}
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    O ID do usuário é um identificador único do Firebase. O usuário pode encontrá-lo em seu perfil ou configurações de conta (se implementado no app de origem).
+                  </p>
                 </div>
                 <div>
                   <Label htmlFor="permission" className="text-xs">Permissão</Label>
@@ -160,7 +169,7 @@ export function SharePasswordDialog({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="read">Leitura (Pode ver a senha)</SelectItem>
-                      <SelectItem value="full">Total (Ver, Editar, Excluir, Recompartilhar)</SelectItem>
+                      <SelectItem value="full">Total (Ver, Editar, Excluir, Gerenciar Compartilhamentos)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -181,11 +190,12 @@ export function SharePasswordDialog({
                   {passwordEntry.sharedWith.map((share) => (
                     <li key={share.userId} className="p-3 border rounded-md bg-background flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div className="flex-grow min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate" title={share.userId}>
-                          {share.userId}
+                        <p className="text-sm font-medium text-foreground truncate flex items-center gap-1.5" title={share.userId}>
+                          <KeyRound size={14} className="text-muted-foreground shrink-0" />
+                          UID: <span className="font-mono text-xs bg-muted px-1 py-0.5 rounded">...{share.userId.slice(-12)}</span>
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          por {share.sharedBy === currentUserId ? "Você" : (share.sharedBy || 'N/A')} em {share.sharedAt ? new Date(share.sharedAt).toLocaleDateString() : 'N/A'}
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          por {getSharedByDisplay(share.sharedBy)} em {share.sharedAt ? new Date(share.sharedAt).toLocaleDateString() : 'N/A'}
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0 mt-2 sm:mt-0">
@@ -196,12 +206,12 @@ export function SharePasswordDialog({
                               onValueChange={(newPerm: 'read' | 'full') => handleUpdateExistingShare(share, newPerm)}
                               disabled={isSubmitting}
                             >
-                              <SelectTrigger className="h-8 text-xs w-[100px]">
+                              <SelectTrigger className="h-8 text-xs w-[160px]">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="read">Leitura</SelectItem>
-                                <SelectItem value="full">Total</SelectItem>
+                                <SelectItem value="read">{getPermissionDisplay('read')}</SelectItem>
+                                <SelectItem value="full">{getPermissionDisplay('full')}</SelectItem>
                               </SelectContent>
                             </Select>
                             <Button 
@@ -238,4 +248,3 @@ export function SharePasswordDialog({
     </Dialog>
   );
 }
-
