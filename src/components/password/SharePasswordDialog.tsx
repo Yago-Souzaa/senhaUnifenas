@@ -357,10 +357,11 @@ export function SharePasswordDialog({
 
         <DialogFooter className="mt-auto pt-4 sticky bottom-0 bg-card border-t">
           <DialogClose asChild>
-            <Button type="button" variant="outline" disabled={isSubmitting}>Fechar</Button>
+            <Button type="button" variant="outline" disabled={isSubmitting}>remover</Button>
           </DialogClose>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 }
+
