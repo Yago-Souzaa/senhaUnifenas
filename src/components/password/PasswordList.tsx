@@ -8,18 +8,17 @@ import { AlertTriangle, FolderOpen } from 'lucide-react';
 import { Card, CardHeader, CardContent } from '@/components/ui/card';
 
 interface PasswordListProps {
-  passwords: PasswordEntry[]; // This list is ALREADY filtered by activeTab and searchTerm from HomePage
+  passwords: PasswordEntry[];
   isLoading: boolean;
   onEdit: (entry: PasswordEntry) => void;
   onDelete: (id: string) => void;
-  searchTerm: string; // The global search term from HomePage, used for contextual messages
-  activeTab: string; // The active category tab from HomePage, used for contextual messages
+  onOpenShareDialog: (entry: PasswordEntry) => void; // Nova prop
+  searchTerm: string;
+  activeTab: string;
+  currentUserId: string | undefined | null;
 }
 
-export function PasswordList({ passwords, isLoading, onEdit, onDelete, searchTerm, activeTab }: PasswordListProps) {
-  // The 'passwords' prop is already filtered by activeTab (category) AND searchTerm
-  // No need to re-filter here.
-
+export function PasswordList({ passwords, isLoading, onEdit, onDelete, onOpenShareDialog, searchTerm, activeTab, currentUserId }: PasswordListProps) {
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -46,7 +45,6 @@ export function PasswordList({ passwords, isLoading, onEdit, onDelete, searchTer
 
   if (passwords.length === 0) {
     if (searchTerm) {
-      // No results for the current search term within the active category (or "Todas")
       return (
         <div className="text-center py-10">
           <AlertTriangle size={48} className="mx-auto text-muted-foreground mb-4" />
@@ -58,7 +56,6 @@ export function PasswordList({ passwords, isLoading, onEdit, onDelete, searchTer
         </div>
       );
     } else {
-      // No search term, and no passwords in the current active category (or "Todas" if it's empty)
       return (
         <div className="text-center py-10">
           <FolderOpen size={48} className="mx-auto text-muted-foreground mb-4" />
@@ -78,7 +75,15 @@ export function PasswordList({ passwords, isLoading, onEdit, onDelete, searchTer
   return (
     <div className="space-y-4">
       {passwords.map(entry => (
-        <PasswordListItem key={entry.id} entry={entry} onEdit={onEdit} onDelete={onDelete} activeTab={activeTab} />
+        <PasswordListItem 
+          key={entry.id} 
+          entry={entry} 
+          onEdit={onEdit} 
+          onDelete={onDelete} 
+          onOpenShareDialog={onOpenShareDialog} // Passar prop
+          activeTab={activeTab}
+          currentUserId={currentUserId}
+        />
       ))}
     </div>
   );

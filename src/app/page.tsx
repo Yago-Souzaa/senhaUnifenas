@@ -10,13 +10,14 @@ import { AddEditPasswordDialog, type PasswordFormValues } from '@/components/pas
 import { ImportPasswordsDialog } from '@/components/password/ImportPasswordsDialog';
 import { PasswordGeneratorDialog } from '@/components/password/PasswordGeneratorDialog';
 import { ClearAllPasswordsDialog } from '@/components/password/ClearAllPasswordsDialog';
+import { SharePasswordDialog } from '@/components/password/SharePasswordDialog'; // Importado
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label'; 
+// import { Label } from '@/components/ui/label'; Remove Label as it's not used
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, KeyRound, EllipsisVertical, FolderKanban, Plus, X } from 'lucide-react';
+import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, KeyRound, EllipsisVertical, FolderKanban, Plus, X, Share2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -78,6 +79,9 @@ export default function HomePage() {
     generatePassword,
     clearAllPasswords,
     exportPasswordsToCSV,
+    sharePassword,
+    updateSharePermission,
+    removeShare,
   } = usePasswordManager(firebaseUser?.uid);
   const { toast } = useToast();
 
@@ -94,6 +98,9 @@ export default function HomePage() {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isDeleteCategoryDialogOpen, setIsDeleteCategoryDialogOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
+
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
+  const [passwordToShare, setPasswordToShare] = useState<PasswordEntry | null>(null);
 
 
   useEffect(() => {
@@ -229,7 +236,7 @@ export default function HomePage() {
       toast({ title: "Não autenticado", description: "Você precisa estar logado para adicionar senhas.", variant: "destructive" });
       return;
     }
-    const entryToAdd: Omit<PasswordEntry, 'id' | 'userId'> = {
+    const entryToAdd: Omit<PasswordEntry, 'id' | 'userId' | 'ownerId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy'> = {
       nome: data.nome,
       login: data.login,
       senha: data.senha,
@@ -249,12 +256,12 @@ export default function HomePage() {
       toast({ title: "Não autenticado", description: "Você precisa estar logado para atualizar senhas.", variant: "destructive" });
       return;
     }
-    const entryToUpdate: PasswordEntry = {
+    // Ensure all required fields for update are present, userId and ownerId will be handled/verified by backend
+    const entryToUpdate: Omit<PasswordEntry, 'userId' | 'ownerId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy'> & {id: string} = {
       id,
-      userId: firebaseUser.uid,
       nome: data.nome,
       login: data.login,
-      senha: data.senha,
+      senha: data.senha, // Senha can be optional if not changing
       categoria: data.categoria,
       customFields: data.customFields || [],
     };
@@ -265,6 +272,7 @@ export default function HomePage() {
       toast({ title: "Erro ao Atualizar", description: (e as Error).message || "Não foi possível atualizar a senha.", variant: "destructive" });
     }
   };
+
 
   const handleSubmitPasswordForm = async (data: PasswordFormValues, id?: string) => {
     if (id && editingPassword && 'id' in editingPassword && editingPassword.id === id) {
@@ -290,7 +298,7 @@ export default function HomePage() {
     try {
       await deletePassword(id);
       if (entryToDelete) {
-        toast({ title: "Sucesso!", description: `Senha para "${entryToDelete.nome}" deletada.`, variant: "destructive" });
+        toast({ title: "Sucesso!", description: `Senha para "${entryToDelete.nome}" (marcada como) deletada.`, variant: "destructive" });
       }
     } catch (e: any) {
       toast({ title: "Erro ao Deletar", description: (e as Error).message || "Não foi possível deletar a senha.", variant: "destructive" });
@@ -326,7 +334,7 @@ export default function HomePage() {
     }
     try {
       await clearAllPasswords();
-      toast({ title: "Tudo Limpo!", description: "Todas as senhas foram removidas.", variant: "destructive" });
+      toast({ title: "Tudo Limpo!", description: "Todas as senhas foram (marcadas como) removidas.", variant: "destructive" });
       setIsClearAllDialogOpen(false);
     } catch (e: any) {
       toast({ title: "Erro ao Limpar", description: (e as Error).message || "Não foi possível limpar todas as senhas.", variant: "destructive" });
@@ -351,8 +359,13 @@ export default function HomePage() {
   };
 
   const handleOpenAddPasswordDialog = () => {
-    setEditingPassword({ categoria: activeTab !== 'Todas' ? activeTab : "" });
+    setEditingPassword({ categoria: activeTab !== 'Todas' ? activeTab : "" }); // Pre-fill category if a tab is active
     setIsAddEditDialogOpen(true);
+  };
+
+  const handleOpenShareDialog = (entry: PasswordEntry) => {
+    setPasswordToShare(entry);
+    setIsShareDialogOpen(true);
   };
 
   const handleAddCategory = useCallback(() => {
@@ -399,7 +412,7 @@ export default function HomePage() {
 
 
   const filteredPasswords = useMemo(() => {
-    let tempPasswords = passwords;
+    let tempPasswords = passwords.filter(p => !p.isDeleted); // Only show non-deleted passwords
 
     if (activeTab !== 'Todas') {
       tempPasswords = tempPasswords.filter(p => p.categoria?.toLowerCase() === activeTab.toLowerCase());
@@ -417,6 +430,8 @@ export default function HomePage() {
             if (field.value.toLowerCase().includes(lowerSearchTerm)) return true;
           }
         }
+        // Add search in sharedWith userIds if desired (optional, might be too noisy)
+        // if (p.sharedWith?.some(s => s.userId.toLowerCase().includes(lowerSearchTerm))) return true;
         return false;
       });
     }
@@ -530,7 +545,7 @@ export default function HomePage() {
                            <FolderKanban size={14} /> Todas
                         </Button>
                         {userCategories.map(category => {
-                           const isCategoryEmpty = !passwords.some(p => p.categoria?.toLowerCase() === category.toLowerCase());
+                           const isCategoryEmpty = !passwords.some(p => p.categoria?.toLowerCase() === category.toLowerCase() && !p.isDeleted);
                            return (
                            <div key={category} className="relative group">
                               <Button
@@ -623,8 +638,10 @@ export default function HomePage() {
                      isLoading={passwordsLoading}
                      onEdit={handleEditPassword}
                      onDelete={handleDeletePassword}
+                     onOpenShareDialog={handleOpenShareDialog} // Passar handler
                      searchTerm={searchTerm}
                      activeTab={activeTab}
+                     currentUserId={firebaseUser.uid}
                   />
                </div>
             </div>
@@ -657,6 +674,15 @@ export default function HomePage() {
         onOpenChange={setIsClearAllDialogOpen}
         onConfirm={handleClearAllPasswords}
       />
+      <SharePasswordDialog
+        isOpen={isShareDialogOpen}
+        onOpenChange={setIsShareDialogOpen}
+        passwordEntry={passwordToShare}
+        currentUserId={firebaseUser?.uid}
+        onSharePassword={sharePassword}
+        onUpdateShare={updateSharePermission}
+        onRemoveShare={removeShare}
+      />
        <AlertDialog open={isDeleteCategoryDialogOpen} onOpenChange={setIsDeleteCategoryDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -681,5 +707,3 @@ export default function HomePage() {
     </div>
   );
 }
-
-    

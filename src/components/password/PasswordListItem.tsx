@@ -6,7 +6,7 @@ import type { PasswordEntry } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban, EllipsisVertical, Check } from 'lucide-react'; // Adicionado Check
+import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban, EllipsisVertical, Check, Share2, Users } from 'lucide-react'; 
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,10 +33,12 @@ interface PasswordListItemProps {
   entry: PasswordEntry;
   onEdit: (entry: PasswordEntry) => void;
   onDelete: (id: string) => void;
+  onOpenShareDialog: (entry: PasswordEntry) => void; // Nova prop
   activeTab: string;
+  currentUserId: string | undefined | null;
 }
 
-export function PasswordListItem({ entry, onEdit, onDelete, activeTab }: PasswordListItemProps) {
+export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, activeTab, currentUserId }: PasswordListItemProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const { toast } = useToast();
@@ -59,6 +61,10 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab }: Passwor
   };
   
   const shouldShowCategoryBadge = entry.categoria && (activeTab === 'Todas' || activeTab.toLowerCase() !== entry.categoria.toLowerCase());
+  const isOwner = entry.ownerId === currentUserId;
+  const canEdit = isOwner || entry.sharedWith?.some(s => s.userId === currentUserId && s.permission === 'full');
+  const canDelete = isOwner || entry.sharedWith?.some(s => s.userId === currentUserId && s.permission === 'full');
+
 
   return (
     <Card className="mb-3 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-md">
@@ -87,27 +93,34 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab }: Passwor
               </div>
             </div>
           </div>
-          {shouldShowCategoryBadge && (
-            <div className="flex items-center mt-0.5">
-              <Badge variant="secondary" className="text-xs py-0.5 px-1.5">
-                <FolderKanban size={12} className="mr-1"/> {entry.categoria}
-              </Badge>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleCopy(entry.categoria, "Categoria", `categoria-${entry.id}`)}
-                className={cn(
-                  "h-5 w-5 ml-1 shrink-0 transition-transform duration-150",
-                  copiedField === `categoria-${entry.id}`
-                    ? 'scale-110 bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-transparent'
-                )}
-                aria-label="Copiar Categoria"
-              >
-                {copiedField === `categoria-${entry.id}` ? <Check size={10} /> : <Copy size={10} />}
-              </Button>
-            </div>
-          )}
+          <div className="flex items-center mt-0.5 space-x-2">
+            {shouldShowCategoryBadge && (
+              <div className="flex items-center">
+                <Badge variant="secondary" className="text-xs py-0.5 px-1.5">
+                  <FolderKanban size={12} className="mr-1"/> {entry.categoria}
+                </Badge>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => handleCopy(entry.categoria, "Categoria", `categoria-${entry.id}`)}
+                  className={cn(
+                    "h-5 w-5 ml-1 shrink-0 transition-transform duration-150",
+                    copiedField === `categoria-${entry.id}`
+                      ? 'scale-110 bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-transparent'
+                  )}
+                  aria-label="Copiar Categoria"
+                >
+                  {copiedField === `categoria-${entry.id}` ? <Check size={10} /> : <Copy size={10} />}
+                </Button>
+              </div>
+            )}
+            {entry.sharedWith && entry.sharedWith.length > 0 && (
+                 <Badge variant={isOwner ? "outline" : "default"} className="text-xs py-0.5 px-1.5 cursor-default" title={`Compartilhado com ${entry.sharedWith.length} usuário(s)`}>
+                    <Users size={12} className="mr-1"/> {entry.sharedWith.length}
+                </Badge>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
@@ -120,27 +133,37 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab }: Passwor
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onEdit(entry)} className="cursor-pointer">
-                  <Edit2 size={16} className="mr-2" />
-                  Editar
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <AlertDialogTrigger asChild>
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
-                    onSelect={(e) => e.preventDefault()} 
-                  >
-                    <Trash2 size={16} className="mr-2" />
-                    Deletar
+                {canEdit && (
+                  <DropdownMenuItem onClick={() => onEdit(entry)} className="cursor-pointer">
+                    <Edit2 size={16} className="mr-2" />
+                    Editar
                   </DropdownMenuItem>
-                </AlertDialogTrigger>
+                )}
+                {isOwner && ( // Somente o proprietário pode iniciar o compartilhamento
+                  <DropdownMenuItem onClick={() => onOpenShareDialog(entry)} className="cursor-pointer">
+                    <Share2 size={16} className="mr-2" />
+                    Compartilhar
+                  </DropdownMenuItem>
+                )}
+                {(canEdit || isOwner) && <DropdownMenuSeparator />} 
+                {canDelete && (
+                  <AlertDialogTrigger asChild>
+                    <DropdownMenuItem
+                      className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
+                      onSelect={(e) => e.preventDefault()} 
+                    >
+                      <Trash2 size={16} className="mr-2" />
+                      Deletar
+                    </DropdownMenuItem>
+                  </AlertDialogTrigger>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
             <AlertDialogContent>
               <AlertDialogHeader>
                 <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Esta ação não pode ser desfeita. Isso excluirá permanentemente a senha de <strong className="font-semibold">{entry.nome}</strong>.
+                  Esta ação não pode ser desfeita. Isso marcará a senha de <strong className="font-semibold">{entry.nome}</strong> como excluída.
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -231,4 +254,3 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab }: Passwor
     </Card>
   );
 }
-
