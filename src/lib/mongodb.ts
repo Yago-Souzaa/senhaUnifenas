@@ -1,6 +1,6 @@
 
 import { MongoClient, Db, Collection, ObjectId } from 'mongodb';
-import type { PasswordEntry } from '@/types';
+import type { PasswordEntry, Group } from '@/types'; // Added Group
 
 const MONGODB_URI = process.env.MONGODB_URI;
 const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME;
@@ -22,7 +22,6 @@ interface MongoDBCache {
   db: Db | null;
 }
 
-// Extend global to declare the mongodb cache
 declare global {
   var mongodb: MongoDBCache | undefined;
 }
@@ -32,8 +31,6 @@ let cachedClient: MongoClient | null = null;
 let cachedDb: Db | null = null;
 
 if (process.env.NODE_ENV === 'development') {
-  // In development mode, use a global variable so that the value
-  // is preserved across module reloads caused by HMR (Hot Module Replacement).
   if (!global.mongodb) {
     global.mongodb = { client: null, db: null };
   }
@@ -41,9 +38,19 @@ if (process.env.NODE_ENV === 'development') {
   cachedDb = global.mongodb.db;
 }
 
-export async function connectToDatabase(): Promise<{ client: MongoClient, db: Db, passwordsCollection: Collection<Omit<PasswordEntry, 'id'>> }> {
+export async function connectToDatabase(): Promise<{ 
+  client: MongoClient, 
+  db: Db, 
+  passwordsCollection: Collection<Omit<PasswordEntry, 'id'>>,
+  groupsCollection: Collection<Omit<Group, 'id'>> // Added groupsCollection
+}> {
   if (cachedClient && cachedDb) {
-    return { client: cachedClient, db: cachedDb, passwordsCollection: cachedDb.collection<Omit<PasswordEntry, 'id'>>('passwords') };
+    return { 
+      client: cachedClient, 
+      db: cachedDb, 
+      passwordsCollection: cachedDb.collection<Omit<PasswordEntry, 'id'>>('passwords'),
+      groupsCollection: cachedDb.collection<Omit<Group, 'id'>>('groups') // Initialize groupsCollection
+    };
   }
 
   const client = new MongoClient(MONGODB_URI!);
@@ -58,10 +65,14 @@ export async function connectToDatabase(): Promise<{ client: MongoClient, db: Db
     cachedDb = db;
   }
   
-  return { client, db, passwordsCollection: db.collection<Omit<PasswordEntry, 'id'>>('passwords') };
+  return { 
+    client, 
+    db, 
+    passwordsCollection: db.collection<Omit<PasswordEntry, 'id'>>('passwords'),
+    groupsCollection: db.collection<Omit<Group, 'id'>>('groups') // Initialize groupsCollection
+  };
 }
 
-// Helper to convert MongoDB _id to string id and vice-versa
 export const fromMongo = <T extends { _id: ObjectId }>(doc: T): Omit<T, '_id'> & { id: string } => {
   const { _id, ...rest } = doc;
   return { ...rest, id: _id.toHexString() };
