@@ -10,7 +10,7 @@ import { AddEditPasswordDialog, type PasswordFormValues } from '@/components/pas
 import { ImportPasswordsDialog } from '@/components/password/ImportPasswordsDialog';
 import { PasswordGeneratorDialog } from '@/components/password/PasswordGeneratorDialog';
 import { ClearAllPasswordsDialog } from '@/components/password/ClearAllPasswordsDialog';
-import { SharePasswordDialog } from '@/components/password/SharePasswordDialog'; // Importado
+import { SharePasswordDialog } from '@/components/password/SharePasswordDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 // import { Label } from '@/components/ui/label'; Remove Label as it's not used
@@ -106,6 +106,9 @@ export default function HomePage() {
 
   useEffect(() => {
     setCurrentYear(new Date().getFullYear());
+  }, []);
+
+  useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
       setAuthLoading(false);
@@ -145,6 +148,26 @@ export default function HomePage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [passwords, firebaseUser]);
+
+  // Sync passwordToShare with the main passwords list from the hook
+  useEffect(() => {
+    if (passwordToShare && passwords && passwords.length > 0) {
+      const updatedVersionInList = passwords.find(p => p.id === passwordToShare.id);
+      // Update passwordToShare only if the instance in the main list is different (e.g., sharedWith updated)
+      // This prevents unnecessary re-renders if the object reference is already the same.
+      if (updatedVersionInList && updatedVersionInList !== passwordToShare) {
+        // A simple way to check for content change if references are tricky,
+        // though usually reference change from the hook's map operation is enough.
+        // For robustness, one might compare JSON.stringify(updatedVersionInList) !== JSON.stringify(passwordToShare)
+        // but that's heavier. The reference check should suffice if the hook always creates new objects on update.
+        setPasswordToShare(updatedVersionInList);
+      } else if (!updatedVersionInList) {
+        // The password being shared/viewed was deleted or is no longer in the list
+        setPasswordToShare(null);
+        setIsShareDialogOpen(false); // Optionally close dialog
+      }
+    }
+  }, [passwords, passwordToShare]);
 
 
   const handleFirebaseError = (error: AuthError) => {
@@ -640,7 +663,7 @@ export default function HomePage() {
                      isLoading={passwordsLoading}
                      onEdit={handleEditPassword}
                      onDelete={handleDeletePassword}
-                     onOpenShareDialog={handleOpenShareDialog} // Passar handler
+                     onOpenShareDialog={handleOpenShareDialog}
                      searchTerm={searchTerm}
                      activeTab={activeTab}
                      currentUserId={firebaseUser.uid}
@@ -704,8 +727,9 @@ export default function HomePage() {
       </AlertDialog>
 
       <footer className="text-center py-4 text-sm text-muted-foreground border-t mt-auto">
-        SenhaFacil &copy; {currentYear !== null ? currentYear : ''}
+        SenhaFacil &copy; {currentYear !== null ? currentYear : '----'}
       </footer>
     </div>
   );
 }
+
