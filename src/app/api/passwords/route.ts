@@ -36,11 +36,16 @@ export async function GET(request: NextRequest) {
       const categorySharesToUserGroups = await categorySharesCollection.find({ groupId: { $in: userGroupIds } }).toArray();
       
       for (const share of categorySharesToUserGroups) {
-        if (share.ownerId === currentUserId && ownedPasswordsRaw.some(p => p.category === share.categoryName)) {
-          // These are user's own passwords, already fetched.
-          // We might want to augment them with sharedVia info if not already done.
+        // If the current user is the owner of the category being shared,
+        // and they have passwords in that category, these passwords are already in `ownedPasswordsRaw`.
+        // We just need to augment them with `sharedVia` info for this specific share context.
+        if (share.ownerId === currentUserId && ownedPasswordsRaw.some(p => p.categoria?.toLowerCase() === share.categoryName?.toLowerCase())) {
            allAccessiblePasswords.forEach(existingPwd => {
-             if (existingPwd.ownerId === share.ownerId && existingPwd.category === share.categoryName && !existingPwd.sharedVia) {
+             // Check if this owned password is in the category mentioned in the share
+             // and if it doesn't already have sharedVia info (or if we want to overwrite/add for multiple shares)
+             if (existingPwd.ownerId === share.ownerId && 
+                 existingPwd.category?.toLowerCase() === share.categoryName?.toLowerCase() && 
+                 !existingPwd.sharedVia) { // Simplified: first share context wins for `sharedVia`
                 const groupDoc = userGroupDocs.find(g => g._id.toHexString() === share.groupId);
                 existingPwd.sharedVia = {
                     categoryOwnerId: share.ownerId,
@@ -50,14 +55,29 @@ export async function GET(request: NextRequest) {
                 };
              }
            });
-          continue;
+          continue; // Done with this share, as it pertains to user's own passwords already processed
         }
         
-        const passwordsFromSharedCategoryRaw = await passwordsCollection.find({
+        // If the share is for a category owned by *another* user
+        // Use a case-insensitive regex for matching the category name
+        const categoryRegex = share.categoryName ? new RegExp(`^${share.categoryName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') : null;
+
+        const findCriteria: any = {
           ownerId: share.ownerId,
-          category: share.categoryName,
           isDeleted: { $ne: true }
-        }).toArray();
+        };
+
+        if (categoryRegex) {
+          findCriteria.category = categoryRegex;
+        } else {
+          // Handle cases where categoryName might be undefined or empty string,
+          // though schema implies categoryName is a string.
+          // This usually means "no category" or "all categories" depending on business logic.
+          // For shared categories, a name is expected. If null/empty, find passwords with no category.
+          findCriteria.category = { $in: [null, ""] };
+        }
+
+        const passwordsFromSharedCategoryRaw = await passwordsCollection.find(findCriteria).toArray();
 
         passwordsFromSharedCategoryRaw.forEach(doc => {
           const password = fromMongo(doc as any) as PasswordEntry;
@@ -65,16 +85,17 @@ export async function GET(request: NextRequest) {
             const groupDoc = userGroupDocs.find(g => g._id.toHexString() === share.groupId);
             password.sharedVia = {
               categoryOwnerId: share.ownerId,
-              categoryName: share.categoryName,
+              categoryName: share.categoryName, // Store original case from share document
               groupId: share.groupId,
               groupName: groupDoc?.name || 'Unknown Group'
             };
             allAccessiblePasswords.push(password);
             processedPasswordIds.add(password.id);
           } else {
-            // Password already added (likely owned), augment with sharedVia if this is a new share context
+            // Password already added (likely owned, or shared via another group), 
+            // augment with sharedVia if this is a new share context and sharedVia is not already set.
             const existingPwd = allAccessiblePasswords.find(p => p.id === password.id);
-            if (existingPwd && !existingPwd.sharedVia) { // Only add sharedVia if not already set (first share context wins for now)
+            if (existingPwd && !existingPwd.sharedVia) { 
                 const groupDoc = userGroupDocs.find(g => g._id.toHexString() === share.groupId);
                 existingPwd.sharedVia = {
                     categoryOwnerId: share.ownerId,
@@ -134,3 +155,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Failed to add password', error: (error as Error).message }, { status: 500 });
   }
 }
+
