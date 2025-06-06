@@ -246,7 +246,7 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancelar</Button>
               </DialogClose>
-              <Button type="submit" className="bg-accent hover:bg-accent/90 text-accent-foreground">
+              <Button type="submit">
                 {initialData?.id ? "Salvar Alterações" : "Adicionar Senha"}
               </Button>
             </DialogFooter>
