@@ -9,9 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
-import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
-import { KeyRound, LogIn, ArrowLeft, ShieldCheck, Info } from 'lucide-react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { KeyRound, LogIn, ArrowLeft, ShieldCheck, Info, Copy, Check, UserSquare2 } from 'lucide-react'; // Added Copy, Check, UserSquare2
 import type { FirebaseUser } from '@/types';
+import { cn } from '@/lib/utils';
 
 export default function SettingsPage() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -19,6 +20,7 @@ export default function SettingsPage() {
   const [currentYear, setCurrentYear] = useState<number | null>(null);
   const { toast } = useToast();
   const router = useRouter();
+  const [copiedUid, setCopiedUid] = useState(false);
 
   useEffect(() => {
     setCurrentYear(new Date().getFullYear());
@@ -33,10 +35,25 @@ export default function SettingsPage() {
     try {
       await signOut(auth);
       toast({ title: "Logout", description: "Você saiu da sua conta." });
-      router.push('/'); // Redireciona para a home após logout
+      router.push('/'); 
     } catch (error) {
       console.error("Logout Error:", error);
       toast({ title: "Erro no Logout", description: (error as Error).message, variant: "destructive" });
+    }
+  };
+
+  const handleCopyUid = () => {
+    if (firebaseUser?.uid) {
+      navigator.clipboard.writeText(firebaseUser.uid)
+        .then(() => {
+          setCopiedUid(true);
+          toast({ title: "UID Copiado!", description: "Seu ID de usuário foi copiado para a área de transferência." });
+          setTimeout(() => setCopiedUid(false), 2000);
+        })
+        .catch(err => {
+          console.error("Failed to copy UID:", err);
+          toast({ title: "Erro ao copiar UID", description: "Não foi possível copiar o UID.", variant: "destructive" });
+        });
     }
   };
 
@@ -70,7 +87,7 @@ export default function SettingsPage() {
           </Card>
         </main>
          <footer className="text-center py-4 text-sm text-muted-foreground border-t mt-auto">
-            SenhaFacil &copy; {currentYear !== null ? currentYear : ''}
+            SenhaFacil &copy; {currentYear !== null ? currentYear : new Date().getFullYear()}
         </footer>
       </div>
     );
@@ -93,6 +110,36 @@ export default function SettingsPage() {
             <CardDescription>Informações sobre sua conta e segurança.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">Email Conectado:</p>
+                <p className="text-sm text-muted-foreground bg-muted p-3 rounded-md break-all">{firebaseUser.email}</p>
+            </div>
+
+            <div className="space-y-2">
+                <p className="text-sm font-medium text-foreground">UID do Usuário (ID de Autenticação):</p>
+                <div className="flex items-center gap-2 bg-muted p-3 rounded-md">
+                    <UserSquare2 size={18} className="text-muted-foreground shrink-0"/>
+                    <p className="text-sm text-muted-foreground break-all flex-grow" title={firebaseUser.uid}>
+                        {firebaseUser.uid}
+                    </p>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleCopyUid}
+                        className={cn(
+                        "h-7 w-7 shrink-0 transition-transform duration-150",
+                        copiedUid
+                            ? 'scale-110 bg-primary text-primary-foreground'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-transparent'
+                        )}
+                        aria-label="Copiar UID"
+                    >
+                        {copiedUid ? <Check size={14} /> : <Copy size={14} />}
+                    </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">Este é o seu identificador único no sistema. Pode ser útil para suporte ou depuração.</p>
+            </div>
+            
             <div className="flex items-start text-sm text-muted-foreground bg-secondary/70 p-4 rounded-md border border-input">
               <Info size={28} className="mr-3 shrink-0 text-primary mt-0.5" /> 
               <div>
@@ -113,21 +160,12 @@ export default function SettingsPage() {
                 </Button>
               </div>
             </div>
-             {firebaseUser.email && (
-                <div className="space-y-1">
-                    <p className="text-sm font-medium text-foreground">Email Conectado:</p>
-                    <p className="text-sm text-muted-foreground bg-muted p-2 rounded-md">{firebaseUser.email}</p>
-                </div>
-            )}
           </CardContent>
         </Card>
       </main>
       <footer className="text-center py-4 text-sm text-muted-foreground border-t mt-auto">
-        SenhaFacil &copy; {currentYear !== null ? currentYear : ''}
+        SenhaFacil &copy; {currentYear !== null ? currentYear : new Date().getFullYear()}
       </footer>
     </div>
   );
 }
-
-
-    
