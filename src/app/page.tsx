@@ -39,14 +39,26 @@ import {
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 
-import { auth } from '@/lib/firebase';
+import { auth, googleProvider } from '@/lib/firebase'; // Import googleProvider
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithPopup, // Import signInWithPopup
   signOut,
   onAuthStateChanged,
   type AuthError
 } from 'firebase/auth';
+
+
+const GoogleIcon = () => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="mr-2 h-5 w-5">
+    <path fill="#EA4335" d="M24 9.5c3.9 0 6.9 1.6 9.1 3.7l6.9-6.9C35.7 2.3 30.4 0 24 0 14.9 0 7.3 5.4 3 12.9l7.3 5.7C12.1 12.8 17.6 9.5 24 9.5z"/>
+    <path fill="#4285F4" d="M46.2 24.5c0-1.7-.1-3.3-.4-4.9H24v9.3h12.5c-.6 3-2.3 5.5-4.9 7.2l7.2 5.6C43.2 37.6 46.2 31.6 46.2 24.5z"/>
+    <path fill="#FBBC05" d="M10.3 28.6c-.5-1.5-.8-3.1-.8-4.7s.3-3.2.8-4.7l-7.3-5.7C1.1 17.4 0 20.6 0 24c0 3.4 1.1 6.6 3 9.3l7.3-4.7z"/>
+    <path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.7l-7.2-5.6c-2.2 1.5-5 2.3-8.7 2.3-6.4 0-11.9-4.3-13.9-10.1l-7.3 5.7C7.3 42.6 14.9 48 24 48z"/>
+    <path fill="none" d="M0 0h48v48H0z"/>
+  </svg>
+);
 
 
 export default function HomePage() {
@@ -162,6 +174,12 @@ export default function HomePage() {
       case 'auth/too-many-requests':
         errorMessage = "Muitas tentativas de login falharam. Tente novamente mais tarde.";
         break;
+      case 'auth/popup-closed-by-user':
+        errorMessage = "O pop-up de login foi fechado antes da conclusão.";
+        break;
+      case 'auth/account-exists-with-different-credential':
+        errorMessage = "Já existe uma conta com este endereço de e-mail, mas com um método de login diferente. Tente fazer login com o método original.";
+        break;
       default:
         errorMessage = (error as Error).message || "Ocorreu um erro de autenticação desconhecido.";
     }
@@ -196,6 +214,16 @@ export default function HomePage() {
     try {
       await signInWithEmailAndPassword(auth, email, password);
       toast({ title: "Login bem-sucedido!", description: "Bem-vindo de volta!" });
+    } catch (error) {
+      handleFirebaseError(error as AuthError);
+    }
+  };
+
+  const handleLoginWithGoogle = async () => {
+    setAuthError(null);
+    try {
+      await signInWithPopup(auth, googleProvider);
+      toast({ title: "Login com Google bem-sucedido!", description: "Bem-vindo!" });
     } catch (error) {
       handleFirebaseError(error as AuthError);
     }
@@ -433,12 +461,12 @@ export default function HomePage() {
                   <TabsTrigger value="register">Registrar</TabsTrigger>
                 </TabsList>
                 <TabsContent value="login">
-                  <form onSubmit={handleLoginWithEmail}>
                     <CardHeader>
-                      <CardTitle className="font-headline text-2xl text-primary flex items-center gap-2"><LogIn size={24}/>Acessar Conta</CardTitle>
+                      <CardTitle className="font-headline text-2xl text-primary flex items-center gap-2"><LogIn size={24}/>Entrar</CardTitle>
                       <CardDescription>Entre com seu email e senha para gerenciar suas senhas.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                  <form onSubmit={handleLoginWithEmail} className="px-6 pb-2">
+                    <div className="space-y-4">
                       <div className="space-y-1">
                         <Label htmlFor="login-email">Email</Label>
                         <Input id="login-email" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -448,19 +476,30 @@ export default function HomePage() {
                         <Input id="login-password" type="password" placeholder="Sua senha" value={password} onChange={(e) => setPassword(e.target.value)} required />
                       </div>
                       {authError && <p className="text-sm text-destructive">{authError}</p>}
-                    </CardContent>
-                    <CardFooter>
+                    </div>
+                    <CardFooter className="px-0 pt-6 pb-0">
                       <Button type="submit" className="w-full bg-primary hover:bg-primary/90">Entrar</Button>
                     </CardFooter>
                   </form>
+                  <div className="my-4 mx-6 flex items-center">
+                    <div className="flex-grow border-t border-muted-foreground/20"></div>
+                    <span className="mx-4 flex-shrink text-xs uppercase text-muted-foreground">Ou</span>
+                    <div className="flex-grow border-t border-muted-foreground/20"></div>
+                  </div>
+                  <div className="px-6 pb-6">
+                    <Button onClick={handleLoginWithGoogle} variant="outline" className="w-full">
+                      <GoogleIcon />
+                      Entrar com Google
+                    </Button>
+                  </div>
                 </TabsContent>
                 <TabsContent value="register">
-                   <form onSubmit={handleRegisterWithEmail}>
                     <CardHeader>
                       <CardTitle className="font-headline text-2xl text-primary flex items-center gap-2"><UserPlus size={24}/>Criar Nova Conta</CardTitle>
                       <CardDescription>Crie uma conta para começar a salvar suas senhas com segurança.</CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
+                   <form onSubmit={handleRegisterWithEmail} className="px-6 pb-2">
+                    <div className="space-y-4">
                       <div className="space-y-1">
                         <Label htmlFor="register-email">Email</Label>
                         <Input id="register-email" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
@@ -470,11 +509,22 @@ export default function HomePage() {
                         <Input id="register-password" type="password" placeholder="Crie uma senha forte" value={password} onChange={(e) => setPassword(e.target.value)} required />
                       </div>
                       {authError && <p className="text-sm text-destructive">{authError}</p>}
-                    </CardContent>
-                    <CardFooter>
+                    </div>
+                    <CardFooter className="px-0 pt-6 pb-0">
                       <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">Registrar</Button>
                     </CardFooter>
                   </form>
+                  <div className="my-4 mx-6 flex items-center">
+                    <div className="flex-grow border-t border-muted-foreground/20"></div>
+                    <span className="mx-4 flex-shrink text-xs uppercase text-muted-foreground">Ou</span>
+                    <div className="flex-grow border-t border-muted-foreground/20"></div>
+                  </div>
+                  <div className="px-6 pb-6">
+                     <Button onClick={handleLoginWithGoogle} variant="outline" className="w-full">
+                       <GoogleIcon />
+                       Criar conta com Google
+                     </Button>
+                  </div>
                 </TabsContent>
               </Tabs>
             </Card>
@@ -722,4 +772,3 @@ export default function HomePage() {
     </div>
   );
 }
-
