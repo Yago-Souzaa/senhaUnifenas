@@ -23,8 +23,8 @@ export async function GET(request: NextRequest) {
 
   try {
     const { passwordsCollection } = await connectToDatabase();
-    // Filtrar senhas pelo userId
-    const passwordsFromDb = await passwordsCollection.find({ userId: userId }).toArray();
+    // Filtrar senhas pelo ownerId e que não estão deletadas
+    const passwordsFromDb = await passwordsCollection.find({ ownerId: userId, isDeleted: { $ne: true } }).toArray();
     const passwords = passwordsFromDb.map(doc => fromMongo(doc as any)) as PasswordEntry[];
 
     if (passwords.length === 0) {

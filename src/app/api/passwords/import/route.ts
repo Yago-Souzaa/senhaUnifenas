@@ -1,10 +1,10 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
-import type { PasswordEntry } from '@/types';
+import type { PasswordEntry, HistoryEntry } from '@/types'; // Added HistoryEntry
 
 // Helper function from usePasswordManager, adapted for server-side
-const parseCSVToEntries = (csvText: string): Array<Omit<PasswordEntry, 'id' | 'userId'>> => {
+const parseCSVToEntries = (csvText: string): Array<Omit<PasswordEntry, 'id' | 'userId' | 'ownerId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt' | 'sharedVia'>> => {
     const lines = csvText.split(/\r\n|\n/).filter(line => line.trim() !== '');
     if (lines.length === 0) {
       return [];
@@ -31,7 +31,7 @@ const parseCSVToEntries = (csvText: string): Array<Omit<PasswordEntry, 'id' | 'u
         headerMap[originalHeader.toLowerCase()] = index;
     });
     
-    const entries: Array<Omit<PasswordEntry, 'id' | 'userId'>> = [];
+    const entries: Array<Omit<PasswordEntry, 'id' | 'userId' | 'ownerId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt' | 'sharedVia'>> = [];
 
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g)
@@ -40,7 +40,7 @@ const parseCSVToEntries = (csvText: string): Array<Omit<PasswordEntry, 'id' | 'u
       
       if (values.length === 0 || (values.length === 1 && values[0] === '')) continue;
 
-      const entry: Partial<Omit<PasswordEntry, 'id' | 'userId'>> & { customFields: Array<{label: string, value: string}> } = {
+      const entry: Partial<Omit<PasswordEntry, 'id' | 'userId' | 'ownerId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt' | 'sharedVia'>> & { customFields: Array<{label: string, value: string}> } = {
         customFields: [],
       };
 
@@ -64,7 +64,7 @@ const parseCSVToEntries = (csvText: string): Array<Omit<PasswordEntry, 'id' | 'u
           entry.customFields.push({ label: originalHeader, value: values[index] });
         }
       });
-      entries.push(entry as Omit<PasswordEntry, 'id' | 'userId'>);
+      entries.push(entry as Omit<PasswordEntry, 'id' | 'userId' | 'ownerId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt' | 'sharedVia'>);
     }
     return entries;
   };
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const userId = formData.get('userId') as string | null; // Ler userId do formData
+    const userId = formData.get('userId') as string | null; 
 
     if (!file) {
       return NextResponse.json({ message: 'No file uploaded' }, { status: 400 });
@@ -90,27 +90,35 @@ export async function POST(request: NextRequest) {
     }
 
     const { passwordsCollection } = await connectToDatabase();
-    // Filtrar senhas existentes pelo userId para verificar duplicatas para este usuário
-    const existingPasswordsForUser = await passwordsCollection.find({ userId: userId }).project({ nome: 1, login: 1, _id: 0 }).toArray();
+    const existingPasswordsForUser = await passwordsCollection.find({ ownerId: userId, isDeleted: { $ne: true } }).project({ nome: 1, login: 1, _id: 0 }).toArray();
     
-    const newEntriesToInsert: Array<Omit<PasswordEntry, 'id'>> = [];
+    const newEntriesToInsert: Array<Omit<PasswordEntry, 'id' | 'sharedVia'>> = []; // Type updated to match DB schema expectation
 
     for (const entry of parsedEntriesFromFile) {
         const isDuplicateForUser = existingPasswordsForUser.some(existing => 
             existing.nome === entry.nome && existing.login === entry.login
         );
         if (!isDuplicateForUser) {
+            const now = new Date();
+            const historyEntry: HistoryEntry = { action: 'created', userId: userId, timestamp: now };
+            
             newEntriesToInsert.push({
-                ...entry, // nome, login, senha, categoria, customFields
-                userId: userId, // Adicionar o userId do usuário logado
+                ...entry, 
+                ownerId: userId,
+                userId: userId, // Keep for legacy if any part of system still relies on it
                 categoria: entry.categoria || '',
-                customFields: entry.customFields || []
+                customFields: entry.customFields || [],
+                createdAt: now,
+                createdBy: { userId: userId, timestamp: now },
+                history: [historyEntry],
+                isDeleted: false,
+                sharedWith: [], // Initialize as empty, individual sharing is deprecated
             });
         }
     }
 
     if (newEntriesToInsert.length > 0) {
-      await passwordsCollection.insertMany(newEntriesToInsert as any); // any para compatibilidade com Omit<PasswordEntry, 'id'>
+      await passwordsCollection.insertMany(newEntriesToInsert as any[]); 
     }
     
     return NextResponse.json({ importedCount: newEntriesToInsert.length }, { status: 200 });
