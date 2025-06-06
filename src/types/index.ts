@@ -94,5 +94,9 @@ export interface PasswordEntry {
   deletedBy?: string;
 }
 
-export type FirebaseUser = FirebaseUserType;
-
+// Extend FirebaseUserType to explicitly include photoURL if not already obvious
+// Although FirebaseUserType from 'firebase/auth' already includes photoURL,
+// this makes it more explicit in our local type definition.
+export interface FirebaseUser extends FirebaseUserType {
+  photoURL?: string | null;
+}

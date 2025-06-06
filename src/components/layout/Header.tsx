@@ -11,11 +11,28 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"; // Import Avatar components
 
 interface HeaderProps {
   user: FirebaseUser | null;
   onLogout?: () => void;
 }
+
+// Helper to get initials from a name or email
+const getInitials = (name?: string | null, email?: string | null): string => {
+  if (name) {
+    const nameParts = name.split(' ');
+    if (nameParts.length > 1) {
+      return `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
+  }
+  if (email) {
+    return email.substring(0, 2).toUpperCase();
+  }
+  return 'U'; // Default User initial
+};
+
 
 export function Header({ user, onLogout }: HeaderProps) {
   return (
@@ -28,15 +45,24 @@ export function Header({ user, onLogout }: HeaderProps) {
         {user && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="rounded-full hover:bg-primary/80 text-primary-foreground h-9 w-9 sm:h-10 sm:w-10">
-                <UserCircle size={28} />
+              <Button variant="ghost" className="rounded-full hover:bg-primary/80 focus-visible:ring-0 focus-visible:ring-offset-0 p-0 h-9 w-9 sm:h-10 sm:w-10">
+                <Avatar className="h-full w-full">
+                  {user.photoURL ? (
+                    <AvatarImage src={user.photoURL} alt={user.displayName || user.email || 'User avatar'} />
+                  ) : null}
+                  <AvatarFallback className="bg-primary-foreground text-primary text-sm font-semibold">
+                    {user.photoURL ? null : (user.displayName || user.email ? getInitials(user.displayName, user.email) : <UserCircle size={28} />)}
+                  </AvatarFallback>
+                </Avatar>
                 <span className="sr-only">Abrir menu do usuário</span>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">Logado como</p>
+                  <p className="text-sm font-medium leading-none">
+                    {user.displayName || "Usuário"}
+                  </p>
                   <p className="text-xs leading-none text-muted-foreground truncate">
                     {user.email}
                   </p>
