@@ -10,6 +10,7 @@ import { AddEditPasswordDialog, type PasswordFormValues } from '@/components/pas
 import { ImportPasswordsDialog } from '@/components/password/ImportPasswordsDialog';
 import { PasswordGeneratorDialog } from '@/components/password/PasswordGeneratorDialog';
 import { ClearAllPasswordsDialog } from '@/components/password/ClearAllPasswordsDialog';
+// SharePasswordDialog import removed
 import { ShareCategoryDialog } from '@/components/category/ShareCategoryDialog'; // New import
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -692,7 +693,7 @@ export default function HomePage() {
             userGroups={groups}
             onShareCategoryWithGroup={shareCategoryWithGroup}
             onUnshareCategoryFromGroup={unshareCategoryFromGroup}
-            fetchCategoryShares={fetchCategorySharesForOwner}
+            fetchCategorySharesForOwner={fetchCategorySharesForOwner} // Corrected prop name passed
         />
       )}
        <AlertDialog open={isDeleteCategoryDialogOpen} onOpenChange={setIsDeleteCategoryDialogOpen}>

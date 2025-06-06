@@ -34,7 +34,7 @@ interface ShareCategoryDialogProps {
   userGroups: Group[];
   onShareCategoryWithGroup: (categoryName: string, groupId: string) => Promise<CategoryShare | undefined>;
   onUnshareCategoryFromGroup: (categoryName: string, groupId: string) => Promise<void>;
-  fetchCategoryShares: (categoryName: string, ownerId: string) => Promise<CategoryShare[]>;
+  fetchCategorySharesForOwner: (categoryName: string, ownerId: string) => Promise<CategoryShare[]>; // Corrected prop name
 }
 
 export function ShareCategoryDialog({
@@ -45,7 +45,7 @@ export function ShareCategoryDialog({
   userGroups,
   onShareCategoryWithGroup,
   onUnshareCategoryFromGroup,
-  fetchCategoryShares,
+  fetchCategorySharesForOwner, // Corrected prop name
 }: ShareCategoryDialogProps) {
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   const [sharedWithGroups, setSharedWithGroups] = useState<CategoryShare[]>([]);
@@ -57,7 +57,7 @@ export function ShareCategoryDialog({
     if (!isOpen || !categoryName || !ownerId) return;
     setIsLoadingShares(true);
     try {
-      const shares = await fetchCategoryShares(categoryName, ownerId);
+      const shares = await fetchCategorySharesForOwner(categoryName, ownerId); // Use corrected prop name
       setSharedWithGroups(shares);
     } catch (error: any) {
       toast({ title: "Erro ao Carregar Compartilhamentos", description: error.message || "Não foi possível buscar os compartilhamentos da categoria.", variant: "destructive" });
@@ -65,7 +65,7 @@ export function ShareCategoryDialog({
     } finally {
       setIsLoadingShares(false);
     }
-  }, [isOpen, categoryName, ownerId, fetchCategoryShares, toast]);
+  }, [isOpen, categoryName, ownerId, fetchCategorySharesForOwner, toast]); // Add corrected prop to dependency array
 
   useEffect(() => {
     loadShares();
@@ -79,6 +79,10 @@ export function ShareCategoryDialog({
     }
     setIsSubmitting(true);
     try {
+      if (typeof onShareCategoryWithGroup !== 'function') {
+        console.error("onShareCategoryWithGroup is not a function inside handleShare. Value:", onShareCategoryWithGroup);
+        throw new Error("Falha interna: Função de compartilhamento não disponível.");
+      }
       const newShare = await onShareCategoryWithGroup(categoryName, selectedGroupId);
       if (newShare) {
         toast({ title: "Sucesso!", description: `Categoria "${categoryName}" compartilhada com o grupo.` });
@@ -95,6 +99,10 @@ export function ShareCategoryDialog({
   const handleUnshare = async (groupIdToUnshare: string) => {
     setIsSubmitting(true);
     try {
+      if (typeof onUnshareCategoryFromGroup !== 'function') {
+        console.error("onUnshareCategoryFromGroup is not a function inside handleUnshare. Value:", onUnshareCategoryFromGroup);
+        throw new Error("Falha interna: Função de remover compartilhamento não disponível.");
+      }
       await onUnshareCategoryFromGroup(categoryName, groupIdToUnshare);
       toast({ title: "Sucesso!", description: `Compartilhamento da categoria "${categoryName}" removido do grupo.` });
       await loadShares(); // Refresh the list of shares
