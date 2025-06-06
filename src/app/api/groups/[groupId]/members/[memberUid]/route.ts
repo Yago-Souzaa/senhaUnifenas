@@ -28,7 +28,7 @@ export async function DELETE(request: NextRequest, { params }: { params: GroupMe
     }
 
     const { groupsCollection } = await connectToDatabase();
-    const group = await groupsCollection.findOne({ _id: new ObjectId(groupId) }) as Group | null;
+    let group = await groupsCollection.findOne({ _id: new ObjectId(groupId) }) as Group | null;
 
     if (!group) {
       return NextResponse.json({ message: 'Group not found' }, { status: 404 });
@@ -41,19 +41,16 @@ export async function DELETE(request: NextRequest, { params }: { params: GroupMe
       return NextResponse.json({ message: 'Only the group owner or an admin can remove members' }, { status: 403 });
     }
 
-    // Prevent owner from removing themselves or an admin from removing the owner
     if (memberUid === group.ownerId) {
         return NextResponse.json({ message: 'Group owner cannot be removed from the group. Delete the group instead or transfer ownership (not implemented).' }, { status: 400 });
     }
 
-    // Prevent an admin from removing another admin if the remover is not the owner
     if (!isOwner && isAdmin) {
         const memberToRemove = group.members.find(m => m.userId === memberUid);
         if (memberToRemove?.role === 'admin') {
             return NextResponse.json({ message: 'Admins cannot remove other admins. Only the group owner can.' }, { status: 403 });
         }
     }
-
 
     const memberExists = group.members.some(member => member.userId === memberUid);
     if (!memberExists) {
@@ -65,19 +62,23 @@ export async function DELETE(request: NextRequest, { params }: { params: GroupMe
       { $pull: { members: { userId: memberUid } }, $set: { updatedAt: new Date() } }
     );
 
+    const updatedGroupDoc = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
+    if (!updatedGroupDoc) {
+         return NextResponse.json({ message: 'Failed to retrieve group after member removal.' }, { status: 500 });
+    }
+
     if (result.modifiedCount === 0 && result.matchedCount > 0) {
-        const updatedGroup = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
-        if (!updatedGroup?.members.some(m => m.userId === memberUid)) {
-            return NextResponse.json({ message: 'Member already removed or not found after pull.', members: updatedGroup?.members || [] }, { status: 200 });
+        // Check if member is actually gone
+        if (!updatedGroupDoc.members.some(m => m.userId === memberUid)) {
+            return NextResponse.json(fromMongo(updatedGroupDoc as any), { status: 200 });
         }
-        return NextResponse.json({ message: 'Failed to remove member, group was matched but not modified.' }, { status: 500 });
+        return NextResponse.json({ message: 'Failed to remove member, group was matched but not modified and member still present.' }, { status: 500 });
     }
     if (result.matchedCount === 0) {
         return NextResponse.json({ message: 'Group not found during update' }, { status: 404 });
     }
 
-    const updatedGroupDoc = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
-    return NextResponse.json({ message: 'Member removed successfully', members: updatedGroupDoc?.members || [] }, { status: 200 });
+    return NextResponse.json(fromMongo(updatedGroupDoc as any), { status: 200 });
 
   } catch (error) {
     console.error('Failed to remove group member:', error);
@@ -104,7 +105,7 @@ export async function PUT(request: NextRequest, { params }: { params: GroupMembe
     }
 
     const { groupsCollection } = await connectToDatabase();
-    const group = await groupsCollection.findOne({ _id: new ObjectId(groupId) }) as Group | null;
+    let group = await groupsCollection.findOne({ _id: new ObjectId(groupId) }) as Group | null;
 
     if (!group) {
       return NextResponse.json({ message: 'Group not found' }, { status: 404 });
@@ -121,14 +122,12 @@ export async function PUT(request: NextRequest, { params }: { params: GroupMembe
       return NextResponse.json({ message: 'Group owner must always have the admin role.' }, { status: 400 });
     }
 
-    // Prevent an admin from changing another admin's role if the remover is not the owner
     if (!isOwner && isAdmin) {
         const memberToUpdate = group.members.find(m => m.userId === memberUid);
-        if (memberToUpdate?.role === 'admin' && memberUid !== currentActionUserId) { // Admins can change their own role if allowed
+        if (memberToUpdate?.role === 'admin' && memberUid !== currentActionUserId) { 
             return NextResponse.json({ message: 'Admins cannot change other admins roles. Only the group owner can.' }, { status: 403 });
         }
     }
-
 
     const memberIndex = group.members.findIndex(m => m.userId === memberUid);
     if (memberIndex === -1) {
@@ -136,29 +135,33 @@ export async function PUT(request: NextRequest, { params }: { params: GroupMembe
     }
 
     if (group.members[memberIndex].role === role) {
-        const updatedGroupDoc = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
-        return NextResponse.json({ message: 'Member role is already set to this value.', members: updatedGroupDoc?.members || [] }, { status: 200 });
+        const currentGroupState = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
+        if (!currentGroupState) return NextResponse.json({ message: 'Group not found after checking role.' }, { status: 404 });
+        return NextResponse.json(fromMongo(currentGroupState as any), { status: 200 });
     }
 
     const result = await groupsCollection.updateOne(
       { _id: new ObjectId(groupId), "members.userId": memberUid },
       { $set: { "members.$.role": role, updatedAt: new Date() } }
     );
+    
+    const updatedGroupDoc = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
+    if (!updatedGroupDoc) {
+         return NextResponse.json({ message: 'Failed to retrieve group after role update.' }, { status: 500 });
+    }
 
     if (result.modifiedCount === 0 && result.matchedCount > 0) {
-        const updatedGroupDoc = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
-        const currentMember = updatedGroupDoc?.members.find(m => m.userId === memberUid);
-        if (currentMember?.role === role) {
-            return NextResponse.json({ message: 'Member role appears to be updated.', members: updatedGroupDoc?.members || [] }, { status: 200 });
+        const currentMember = updatedGroupDoc.members.find(m => m.userId === memberUid);
+        if (currentMember?.role === role) { // Role is already what we wanted
+            return NextResponse.json(fromMongo(updatedGroupDoc as any), { status: 200 });
         }
-        return NextResponse.json({ message: 'Failed to update member role, matched but not modified.' }, { status: 500 });
+        return NextResponse.json({ message: 'Failed to update member role, matched but not modified and role not changed.' }, { status: 500 });
     }
     if (result.matchedCount === 0) {
         return NextResponse.json({ message: 'Group or member not found during update' }, { status: 404 });
     }
 
-    const updatedGroupDoc = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
-    return NextResponse.json({ message: 'Member role updated successfully', members: updatedGroupDoc?.members || [] }, { status: 200 });
+    return NextResponse.json(fromMongo(updatedGroupDoc as any), { status: 200 });
 
   } catch (error) {
     console.error('Failed to update group member role:', error);

@@ -32,10 +32,8 @@ export function usePasswordManager(currentUserId?: string | null) {
   const fetchPasswords = useCallback(async () => {
     if (!currentUserId) {
       setPasswords([]);
-      // Do not set isLoading to false here if part of a larger initial load
       return;
     }
-    // setError(null); // Clear previous global errors before trying
     try {
       const response = await fetch(API_BASE_URL, {
         headers: { 'X-User-ID': currentUserId }
@@ -49,7 +47,7 @@ export function usePasswordManager(currentUserId?: string | null) {
     } catch (err: any) {
       console.error("Failed to load passwords:", err);
       setError(err.message || 'An unknown error occurred while fetching passwords.');
-      setPasswords([]); // Clear passwords on error
+      setPasswords([]); 
     }
   }, [currentUserId]);
 
@@ -70,25 +68,21 @@ export function usePasswordManager(currentUserId?: string | null) {
       setGroups(data);
     } catch (err: any) {
       console.error("Failed to load groups in hook:", err);
-      // Do not set global error here, let calling component handle if needed
       setGroups([]);
-      throw err;
+      throw err; 
     }
   }, [currentUserId]);
 
   useEffect(() => {
     if (currentUserId) {
       setIsLoading(true);
-      setError(null); // Clear previous errors
+      setError(null); 
       Promise.all([
         fetchPasswords(),
         fetchGroups().catch(err => {
           console.warn("Initial group fetch failed in usePasswordManager useEffect:", err.message);
-          // This error is not critical for the main password list, so don't set global error
-          // setError(err.message || "Failed to fetch groups initially.");
         })
       ]).catch(globalError => {
-        // This catch is for errors from fetchPasswords or if fetchGroups re-throws critically
         setError(globalError.message || "An error occurred during initial data loading.");
       }).finally(() => {
         setIsLoading(false);
@@ -119,7 +113,7 @@ export function usePasswordManager(currentUserId?: string | null) {
         throw new Error(errorMessage);
       }
       const newPassword: PasswordEntry = await response.json();
-      setPasswords(prev => [...prev, newPassword].sort((a,b) => a.nome.localeCompare(b.nome))); // Keep sorted for consistency
+      setPasswords(prev => [...prev, newPassword].sort((a,b) => a.nome.localeCompare(b.nome)));
       return newPassword;
     } catch (err: any) {
       console.error("Error in addPassword:", err);
@@ -163,10 +157,7 @@ export function usePasswordManager(currentUserId?: string | null) {
         const errorMessage = await parseErrorResponse(response, `Failed to delete password`);
         throw new Error(errorMessage);
       }
-      // Optimistically remove, or re-fetch passwords for consistency with soft delete
       setPasswords(prev => prev.filter(p => p.id !== id));
-      // For soft delete, better to refetch or update the specific item's isDeleted flag
-      // await fetchPasswords();
     } catch (err: any) {
       console.error("Error in deletePassword:", err);
       throw err;
@@ -183,7 +174,6 @@ export function usePasswordManager(currentUserId?: string | null) {
       const response = await fetch(`${API_BASE_URL}/import`, {
         method: 'POST',
         body: formData,
-        // No 'Content-Type' for FormData, browser sets it with boundary
         headers: { 'X-User-ID': currentUserId }
       });
 
@@ -191,7 +181,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       if (!response.ok) {
         throw new Error(result.message || `Failed to import passwords`);
       }
-      await fetchPasswords(); // Refresh password list
+      await fetchPasswords(); 
       return { importedCount: result.importedCount, message: result.message };
     } catch (err: any) {
       console.error("Error in importPasswords:", err);
@@ -235,7 +225,7 @@ export function usePasswordManager(currentUserId?: string | null) {
     if (useLowercase) charset += lower;
     if (useNumbers) charset += nums;
     if (useSymbols) charset += syms;
-    if (charset === "") charset = lower + nums; // Default to something if nothing selected
+    if (charset === "") charset = lower + nums; 
     let newPassword = "";
     for (let i = 0; i < length; i++) {
         newPassword += charset.charAt(Math.floor(Math.random() * charset.length));
@@ -247,7 +237,7 @@ export function usePasswordManager(currentUserId?: string | null) {
     if (!currentUserId) throw new Error('User not authenticated');
     try {
       const response = await fetch(`${API_BASE_URL}/clear`, {
-        method: 'POST', // Ensure API matches this
+        method: 'POST', 
         headers: { 'X-User-ID': currentUserId }
       });
       if (!response.ok) {
@@ -295,18 +285,9 @@ export function usePasswordManager(currentUserId?: string | null) {
         const errorMessage = await parseErrorResponse(response, 'Failed to add group member');
         throw new Error(errorMessage);
       }
-      // API returns { members: GroupMember[] }
-      const { members } = await response.json() as { members: GroupMember[] };
-      let updatedGroup: Group | undefined;
-      setGroups(prev => prev.map(g => {
-        if (g.id === groupId) {
-          updatedGroup = { ...g, members: members.sort((a,b) => a.userId.localeCompare(b.userId)) };
-          return updatedGroup;
-        }
-        return g;
-      }));
-      if (!updatedGroup) throw new Error("Group not found after adding member in hook."); // Should be unreachable
-      return updatedGroup;
+      const updatedGroupFromAPI: Group = await response.json();
+      setGroups(prev => prev.map(g => g.id === groupId ? updatedGroupFromAPI : g).sort((a,b) => a.name.localeCompare(b.name)));
+      return updatedGroupFromAPI;
     } catch (err) {
       console.error("Error in addGroupMember:", err);
       throw err;
@@ -324,17 +305,11 @@ export function usePasswordManager(currentUserId?: string | null) {
         const errorMessage = await parseErrorResponse(response, 'Failed to remove group member');
         throw new Error(errorMessage);
       }
-      const { members } = await response.json() as { members: GroupMember[] };
-      let updatedGroup: Group | undefined;
-      setGroups(prev => prev.map(g => {
-        if (g.id === groupId) {
-          updatedGroup = { ...g, members: members.sort((a,b) => a.userId.localeCompare(b.userId)) };
-          return updatedGroup;
-        }
-        return g;
-      }));
-      if (!updatedGroup) throw new Error("Group not found after removing member in hook.");
-      return updatedGroup;
+      const updatedGroupFromAPI: Group = await response.json();
+      setGroups(prev => prev.map(g => g.id === groupId ? updatedGroupFromAPI : g).sort((a,b) => a.name.localeCompare(b.name)));
+      // If the group was "deleted" by removing the last member and the API reflects this (e.g. by not returning it), handle appropriately.
+      // For now, assume group still exists, just members changed.
+      return updatedGroupFromAPI;
     } catch (err) {
       console.error("Error in removeGroupMember:", err);
       throw err;
@@ -353,17 +328,9 @@ export function usePasswordManager(currentUserId?: string | null) {
         const errorMessage = await parseErrorResponse(response, 'Failed to update member role');
         throw new Error(errorMessage);
       }
-      const { members } = await response.json() as { members: GroupMember[] };
-      let updatedGroup: Group | undefined;
-      setGroups(prev => prev.map(g => {
-        if (g.id === groupId) {
-          updatedGroup = { ...g, members: members.sort((a,b) => a.userId.localeCompare(b.userId)) };
-          return updatedGroup;
-        }
-        return g;
-      }));
-      if (!updatedGroup) throw new Error("Group not found after updating member role in hook.");
-      return updatedGroup;
+      const updatedGroupFromAPI: Group = await response.json();
+      setGroups(prev => prev.map(g => g.id === groupId ? updatedGroupFromAPI : g).sort((a,b) => a.name.localeCompare(b.name)));
+      return updatedGroupFromAPI;
     } catch (err) {
       console.error("Error in updateGroupMemberRole:", err);
       throw err;
@@ -382,7 +349,7 @@ export function usePasswordManager(currentUserId?: string | null) {
         throw new Error(errorMessage);
       }
       setGroups(prev => prev.filter(g => g.id !== groupId));
-      await fetchPasswords(); // Passwords might have been unshared from this group implicitly
+      await fetchPasswords(); 
     } catch (err) {
       console.error("Error in deleteGroup:", err);
       throw err;
@@ -453,6 +420,10 @@ export function usePasswordManager(currentUserId?: string | null) {
 
   const fetchCategorySharesForOwner = useCallback(async (categoryName: string, ownerId: string): Promise<CategoryShare[]> => {
     if (!currentUserId) throw new Error('User not authenticated for fetching category shares');
+    if (typeof fetch === 'undefined') { // Guard for server-side or non-browser environments
+      console.warn('fetchCategorySharesForOwner called in an environment without fetch.');
+      return [];
+    }
     try {
       const response = await fetch(`${CATEGORIES_API_BASE_URL}/shares?ownerId=${encodeURIComponent(ownerId)}&categoryName=${encodeURIComponent(categoryName)}`, {
         headers: { 'X-User-ID': currentUserId },

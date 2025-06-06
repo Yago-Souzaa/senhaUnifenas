@@ -63,20 +63,29 @@ export async function POST(request: NextRequest, { params }: { params: GroupMemb
       { _id: new ObjectId(groupId) },
       { $addToSet: { members: newMember }, $set: { updatedAt: new Date() } }
     );
+    
+    const updatedGroupDoc = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
+
+    if (!updatedGroupDoc) {
+      // This should ideally not happen if the group existed before and matchedCount was > 0
+      return NextResponse.json({ message: 'Failed to retrieve group after update.' }, { status: 500 });
+    }
 
     if (result.modifiedCount === 0 && result.matchedCount > 0) {
-         const updatedGroup = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
-         if (updatedGroup?.members.some(m => m.userId === userIdToAdd)) {
-            return NextResponse.json({ message: 'Member already exists or was just added', members: updatedGroup.members || [] }, { status: 200 });
+         // Check if member exists now, even if modifiedCount is 0 (e.g. $addToSet found existing, or concurrent add)
+         if (updatedGroupDoc.members.some(m => m.userId === userIdToAdd)) {
+            // Return the full group object
+            return NextResponse.json(fromMongo(updatedGroupDoc as any), { status: 200 });
          }
-         return NextResponse.json({ message: 'Failed to add member, group was matched but not modified.' }, { status: 500 });
+         return NextResponse.json({ message: 'Failed to add member, group was matched but not modified and member not found.' }, { status: 500 });
     }
     if (result.matchedCount === 0) {
-        return NextResponse.json({ message: 'Group not found during update' }, { status: 404 });
+        // Group was not found for the update operation
+        return NextResponse.json({ message: 'Group not found during update operation' }, { status: 404 });
     }
 
-    const updatedGroupDoc = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
-    return NextResponse.json({ message: 'Member added successfully', members: updatedGroupDoc?.members || [] }, { status: 200 });
+    // Member added successfully, modifiedCount > 0
+    return NextResponse.json(fromMongo(updatedGroupDoc as any), { status: 200 }); // Return the full group object
 
   } catch (error) {
     console.error('Failed to add group member:', error);
