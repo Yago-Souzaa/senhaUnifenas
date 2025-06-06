@@ -131,7 +131,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab, currentUs
               </div>
             )}
              {displaySharedVia && (
-                 <Badge variant="outline" className="text-xs py-0.5 px-1.5 cursor-default bg-teal-600 text-white hover:bg-teal-700" title={`Acessado via categoria "${entry.sharedVia?.categoryName}" do grupo "${entry.sharedVia?.groupName || 'Desconhecido'}"`}>
+                 <Badge variant="outline" className="text-xs py-0.5 px-1.5 cursor-default border-accent text-accent bg-accent/10 hover:bg-accent/20" title={`Acessado via categoria "${entry.sharedVia?.categoryName}" do grupo "${entry.sharedVia?.groupName || 'Desconhecido'}"`}>
                     <ShieldCheck size={12} className="mr-1"/> Compartilhado via Cat.
                 </Badge>
             )}
@@ -163,8 +163,6 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab, currentUs
                   </DropdownMenuItem>
                 )}
                 
-                {/* Item de compartilhar com grupo REMOVIDO */}
-
                 {canEdit && canDelete && <DropdownMenuSeparator />}
 
                 {canDelete && (
@@ -281,3 +279,4 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab, currentUs
     </Card>
   );
 }
+
