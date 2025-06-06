@@ -273,13 +273,13 @@ export function usePasswordManager(currentUserId?: string | null) {
     }
   }, [currentUserId]);
 
-  const addGroupMember = useCallback(async (groupId: string, userIdToAdd: string, role: 'member' | 'admin'): Promise<Group> => {
+  const addGroupMember = useCallback(async (groupId: string, userIdToAdd: string, role: 'member' | 'admin', displayName?: string): Promise<Group> => {
     if (!currentUserId) throw new Error('User not authenticated');
     try {
       const response = await fetch(`${GROUPS_API_BASE_URL}/${groupId}/members`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-User-ID': currentUserId },
-        body: JSON.stringify({ userIdToAdd, role }),
+        body: JSON.stringify({ userIdToAdd, role, displayName }), // Pass displayName
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, 'Failed to add group member');
@@ -307,8 +307,6 @@ export function usePasswordManager(currentUserId?: string | null) {
       }
       const updatedGroupFromAPI: Group = await response.json();
       setGroups(prev => prev.map(g => g.id === groupId ? updatedGroupFromAPI : g).sort((a,b) => a.name.localeCompare(b.name)));
-      // If the group was "deleted" by removing the last member and the API reflects this (e.g. by not returning it), handle appropriately.
-      // For now, assume group still exists, just members changed.
       return updatedGroupFromAPI;
     } catch (err) {
       console.error("Error in removeGroupMember:", err);
@@ -419,8 +417,11 @@ export function usePasswordManager(currentUserId?: string | null) {
   }, [currentUserId, fetchPasswords]);
 
   const fetchCategorySharesForOwner = useCallback(async (categoryName: string, ownerId: string): Promise<CategoryShare[]> => {
-    if (!currentUserId) throw new Error('User not authenticated for fetching category shares');
-    if (typeof fetch === 'undefined') { // Guard for server-side or non-browser environments
+    if (!currentUserId) { 
+        console.warn('fetchCategorySharesForOwner called without currentUserId, returning empty array.');
+        return []; // Return empty or throw, depending on desired strictness
+    }
+    if (typeof fetch === 'undefined') { 
       console.warn('fetchCategorySharesForOwner called in an environment without fetch.');
       return [];
     }
@@ -466,3 +467,4 @@ export function usePasswordManager(currentUserId?: string | null) {
     fetchCategorySharesForOwner,
   };
 }
+

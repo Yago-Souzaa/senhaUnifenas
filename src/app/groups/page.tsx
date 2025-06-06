@@ -36,6 +36,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
+import { Label } from '@/components/ui/label';
 
 
 export default function GroupsPage() {
@@ -68,6 +69,7 @@ export default function GroupsPage() {
   const [renamingGroupName, setRenamingGroupName] = useState('');
   const [isManageMembersDialogOpen, setIsManageMembersDialogOpen] = useState(false);
   const [memberUidToAdd, setMemberUidToAdd] = useState('');
+  const [memberDisplayNameToAdd, setMemberDisplayNameToAdd] = useState(''); // State for new member's display name
   const [memberRole, setMemberRole] = useState<'member' | 'admin'>('member');
 
   const loadGroupsForPage = useCallback(async () => {
@@ -100,12 +102,12 @@ export default function GroupsPage() {
     return () => unsubscribe();
   }, [loadGroupsForPage]);
   
-  useEffect(() => { // If groups from hook change, reflect on page
+  useEffect(() => { 
     if (!passwordManagerLoading) {
         setGroupsPageLoading(false);
     }
-    if (passwordManagerError && !groupsPageError) { // Prioritize local page error if any
-        // setGroupsPageError(passwordManagerError); // Decided against this to keep page error specific
+    if (passwordManagerError && !groupsPageError) { 
+        // setGroupsPageError(passwordManagerError); 
     }
   }, [groups, passwordManagerLoading, passwordManagerError, groupsPageError]);
 
@@ -170,11 +172,12 @@ export default function GroupsPage() {
         return;
     }
     try {
-        const updatedGroupFromHook = await addGroupMember(editingGroup.id, memberUidToAdd.trim(), memberRole);
+        const updatedGroupFromHook = await addGroupMember(editingGroup.id, memberUidToAdd.trim(), memberRole, memberDisplayNameToAdd.trim() || undefined);
         toast({ title: "Membro Adicionado", description: `Usuário adicionado ao grupo "${editingGroup.name}".` });
         setMemberUidToAdd('');
+        setMemberDisplayNameToAdd(''); // Reset display name field
         setMemberRole('member');
-        setEditingGroup(updatedGroupFromHook); // Directly use the updated group from the hook
+        setEditingGroup(updatedGroupFromHook); 
 
     } catch (e: any) {
         toast({ title: "Erro ao Adicionar Membro", description: e.message || "Não foi possível adicionar o membro.", variant: "destructive" });
@@ -189,9 +192,8 @@ export default function GroupsPage() {
         if (updatedGroupFromHook) {
           setEditingGroup(updatedGroupFromHook);
         } else {
-          // This case should ideally not happen if the hook handles group removal from its state correctly
           setIsManageMembersDialogOpen(false); 
-          await fetchGroups(); // Re-fetch all groups if the specific one is gone
+          await fetchGroups(); 
         }
     } catch (e: any) {
         toast({ title: "Erro ao Remover Membro", description: e.message || "Não foi possível remover o membro.", variant: "destructive" });
@@ -304,12 +306,12 @@ export default function GroupsPage() {
                                             <DropdownMenuItem onClick={() => { setEditingGroup(group); setIsManageMembersDialogOpen(true); }}>
                                                 <UserPlus className="mr-2 h-4 w-4" />Gerenciar Membros
                                             </DropdownMenuItem>
-                                            {isOwner && ( // Only owner can rename
+                                            {isOwner && ( 
                                                 <DropdownMenuItem onClick={() => { setGroupToRename(group); setRenamingGroupName(group.name); }}>
                                                     <Edit3 className="mr-2 h-4 w-4" />Renomear Grupo
                                                 </DropdownMenuItem>
                                             )}
-                                            {isOwner && ( // Only owner can delete
+                                            {isOwner && ( 
                                                 <AlertDialogTrigger asChild>
                                                     <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={e=>e.preventDefault()}>
                                                         <Trash2 className="mr-2 h-4 w-4" />Deletar Grupo
@@ -327,7 +329,7 @@ export default function GroupsPage() {
                                     {group.members.map(member => (
                                         <li key={member.userId} className="flex justify-between items-center">
                                             <span className="truncate" title={member.userId}>
-                                                UID: ...{member.userId.slice(-8)} 
+                                                {member.displayName || `UID: ...${member.userId.slice(-8)}`}
                                                 {member.userId === firebaseUser.uid && " (Você)"}
                                             </span>
                                             <Badge variant={member.role === 'admin' ? "default" : "secondary"}>{member.role}</Badge>
@@ -336,12 +338,12 @@ export default function GroupsPage() {
                                     </ul>
                                 </ScrollArea>
                             </CardContent>
-                            {isOwner && ( // Only owner can trigger delete dialog for the group
+                            {isOwner && ( 
                                 <AlertDialogContent>
                                     <AlertDialogHeader>
                                         <AlertDialogTitle>Deletar Grupo "{group.name}"?</AlertDialogTitle>
                                         <AlertDialogDescription>
-                                        Esta ação é irreversível. Todas as senhas compartilhadas com este grupo serão automaticamente desvinculadas dele.
+                                        Esta ação é irreversível. Todas as categorias compartilhadas com este grupo serão automaticamente desvinculadas dele.
                                         </AlertDialogDescription>
                                     </AlertDialogHeader>
                                     <AlertDialogFooter>
@@ -400,7 +402,7 @@ export default function GroupsPage() {
       )}
       
       {editingGroup && firebaseUser && (
-        <AlertDialog open={isManageMembersDialogOpen} onOpenChange={(open) => {if (!open) setEditingGroup(null); setIsManageMembersDialogOpen(open);}}>
+        <AlertDialog open={isManageMembersDialogOpen} onOpenChange={(open) => {if (!open) { setEditingGroup(null); setMemberUidToAdd(''); setMemberDisplayNameToAdd('');} setIsManageMembersDialogOpen(open);}}>
             <AlertDialogContent className="sm:max-w-lg">
                 <AlertDialogHeader>
                     <AlertDialogTitle>Gerenciar Membros de "{editingGroup.name}"</AlertDialogTitle>
@@ -409,19 +411,34 @@ export default function GroupsPage() {
                 <div className="py-4 space-y-4">
                     <h3 className="text-sm font-semibold">Adicionar Novo Membro</h3>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
-                        <Input 
+                       <div className="sm:col-span-3 space-y-1">
+                         <Label htmlFor="memberUid" className="text-xs">UID do Membro (Firebase Auth UID)</Label>
+                         <Input 
+                            id="memberUid"
                             placeholder="UID do Membro" 
                             value={memberUidToAdd} 
                             onChange={(e) => setMemberUidToAdd(e.target.value)}
-                            className="sm:col-span-2"
-                        />
+                         />
+                       </div>
+                       <div className="sm:col-span-2 space-y-1">
+                         <Label htmlFor="memberDisplayName" className="text-xs">Nome de Exibição (Opcional)</Label>
+                         <Input 
+                            id="memberDisplayName"
+                            placeholder="Nome de Exibição" 
+                            value={memberDisplayNameToAdd} 
+                            onChange={(e) => setMemberDisplayNameToAdd(e.target.value)}
+                         />
+                       </div>
+                       <div className="space-y-1">
+                         <Label htmlFor="memberRole" className="text-xs">Função</Label>
                          <Select value={memberRole} onValueChange={(v: 'member' | 'admin') => setMemberRole(v)}>
-                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectTrigger id="memberRole"><SelectValue /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="member">Membro</SelectItem>
                                 <SelectItem value="admin">Admin</SelectItem>
                             </SelectContent>
                         </Select>
+                       </div>
                     </div>
                     <Button onClick={handleAddMember} className="w-full" disabled={!memberUidToAdd.trim()}>Adicionar Membro</Button>
                     
@@ -432,26 +449,32 @@ export default function GroupsPage() {
                             {editingGroup.members.map(member => {
                                 const isCurrentUserTheMemberBeingListed = member.userId === firebaseUser.uid;
                                 const isMemberOwner = member.userId === editingGroup.ownerId;
-                                // Check if current user is owner or admin of the group being edited
                                 const isManagerOwner = editingGroup.ownerId === firebaseUser.uid;
                                 const isManagerAdmin = editingGroup.members.some(m => m.userId === firebaseUser.uid && m.role === 'admin');
-
-                                const canChangeRole = isManagerOwner || (isManagerAdmin && !isMemberOwner && member.userId !== firebaseUser.uid); // Admins can't change owner's or other admin's roles, unless they are owner
+                                
+                                let canChangeRole = isManagerOwner || (isManagerAdmin && !isMemberOwner && member.userId !== firebaseUser.uid);
                                 if(isManagerOwner && isMemberOwner) {
-                                    // Owner cannot change their own role from admin
-                                } else if (isManagerAdmin && member.role === 'admin' && !isManagerOwner) {
-                                   // An admin cannot change another admin's role unless they are the owner
+                                   canChangeRole = false; // Owner cannot change their own role from admin if it's the only admin etc. (simplified: owner's role is fixed here)
+                                } else if (isManagerAdmin && member.role === 'admin' && !isManagerOwner && member.userId !== firebaseUser.uid) {
+                                   canChangeRole = false; // An admin cannot change another admin's role unless they are the owner
+                                }
+                                if (member.userId === firebaseUser.uid && !isManagerOwner) { // Admin cannot change their own role.
+                                    canChangeRole = false;
                                 }
                                 
                                 const canRemove = (isManagerOwner && !isMemberOwner) || (isManagerAdmin && !isMemberOwner && member.role !== 'admin');
 
-
                                 return (
                                 <li key={member.userId} className="flex items-center justify-between p-2 border rounded-md text-xs">
-                                    <div className="truncate" title={member.userId}>
-                                        <span className="font-mono">...{member.userId.slice(-10)}</span>
-                                        {isMemberOwner && <Badge variant="outline" className="ml-2 text-primary border-primary">Proprietário</Badge>}
-                                        {isCurrentUserTheMemberBeingListed && !isMemberOwner && <Badge variant="secondary" className="ml-2">Você</Badge>}
+                                    <div className="truncate flex-1 mr-2">
+                                        <p className="font-medium text-foreground truncate" title={member.displayName || member.userId}>
+                                          {member.displayName || "Nome não definido"}
+                                        </p>
+                                        <p className="font-mono text-muted-foreground text-[0.7rem] truncate" title={member.userId}>
+                                          UID: ...{member.userId.slice(-10)}
+                                        </p>
+                                        {isMemberOwner && <Badge variant="outline" className="ml-0 mt-1 text-primary border-primary text-[0.65rem] px-1 py-0">Proprietário</Badge>}
+                                        {isCurrentUserTheMemberBeingListed && !isMemberOwner && <Badge variant="secondary" className="ml-0 mt-1 text-[0.65rem] px-1 py-0">Você</Badge>}
                                     </div>
                                     <div className="flex items-center gap-1">
                                         {isMemberOwner ? (
@@ -486,7 +509,7 @@ export default function GroupsPage() {
                     </ScrollArea>
                 </div>
                 <AlertDialogFooter>
-                    <AlertDialogCancel onClick={() => {setEditingGroup(null); setMemberUidToAdd('');}}>Fechar</AlertDialogCancel>
+                    <AlertDialogCancel onClick={() => {setEditingGroup(null); setMemberUidToAdd(''); setMemberDisplayNameToAdd('');}}>Fechar</AlertDialogCancel>
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
@@ -498,3 +521,4 @@ export default function GroupsPage() {
     </div>
   );
 }
+

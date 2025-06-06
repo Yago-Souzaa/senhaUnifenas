@@ -12,6 +12,7 @@ export interface SharedUser {
 
 export interface GroupMember {
   userId: string;
+  displayName?: string; // Added displayName
   role: 'member' | 'admin';
   addedAt?: Date;
   addedBy?: string;
@@ -94,3 +95,4 @@ export interface PasswordEntry {
 }
 
 export type FirebaseUser = FirebaseUserType;
+

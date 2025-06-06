@@ -23,7 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: GroupMemb
       return NextResponse.json({ message: 'Invalid Group ID format' }, { status: 400 });
     }
 
-    const { userIdToAdd, role } = (await request.json()) as { userIdToAdd: string; role: 'member' | 'admin' };
+    const { userIdToAdd, role, displayName } = (await request.json()) as { userIdToAdd: string; role: 'member' | 'admin', displayName?: string };
     if (!userIdToAdd || !role || !['member', 'admin'].includes(role)) {
       return NextResponse.json({ message: 'User ID to add and a valid role (member/admin) are required' }, { status: 400 });
     }
@@ -55,6 +55,7 @@ export async function POST(request: NextRequest, { params }: { params: GroupMemb
     const newMember: GroupMember = {
       userId: userIdToAdd,
       role,
+      displayName: displayName?.trim() || undefined, // Add displayName, ensure it's trimmed or undefined
       addedAt: new Date(),
       addedBy: currentActionUserId,
     };
@@ -67,28 +68,24 @@ export async function POST(request: NextRequest, { params }: { params: GroupMemb
     const updatedGroupDoc = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
 
     if (!updatedGroupDoc) {
-      // This should ideally not happen if the group existed before and matchedCount was > 0
       return NextResponse.json({ message: 'Failed to retrieve group after update.' }, { status: 500 });
     }
 
     if (result.modifiedCount === 0 && result.matchedCount > 0) {
-         // Check if member exists now, even if modifiedCount is 0 (e.g. $addToSet found existing, or concurrent add)
          if (updatedGroupDoc.members.some(m => m.userId === userIdToAdd)) {
-            // Return the full group object
             return NextResponse.json(fromMongo(updatedGroupDoc as any), { status: 200 });
          }
          return NextResponse.json({ message: 'Failed to add member, group was matched but not modified and member not found.' }, { status: 500 });
     }
     if (result.matchedCount === 0) {
-        // Group was not found for the update operation
         return NextResponse.json({ message: 'Group not found during update operation' }, { status: 404 });
     }
 
-    // Member added successfully, modifiedCount > 0
-    return NextResponse.json(fromMongo(updatedGroupDoc as any), { status: 200 }); // Return the full group object
+    return NextResponse.json(fromMongo(updatedGroupDoc as any), { status: 200 });
 
   } catch (error) {
     console.error('Failed to add group member:', error);
     return NextResponse.json({ message: 'Failed to add group member', error: (error as Error).message }, { status: 500 });
   }
 }
+
