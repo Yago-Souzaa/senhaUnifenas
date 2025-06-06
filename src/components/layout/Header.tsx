@@ -1,6 +1,6 @@
 
 import type { FirebaseUser } from '@/types';
-import { KeyRound, LogOut, Settings, UserCircle } from 'lucide-react'; // Importado UserCircle
+import { KeyRound, LogOut, Settings, UserCircle, Users } from 'lucide-react'; // Importado Users
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import {
@@ -43,6 +43,12 @@ export function Header({ user, onLogout }: HeaderProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/groups" className="cursor-pointer">
+                  <Users size={16} className="mr-2" />
+                  Meus Grupos
+                </Link>
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <Link href="/settings" className="cursor-pointer">
                   <Settings size={16} className="mr-2" />

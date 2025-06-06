@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { usePasswordManager } from '@/hooks/usePasswordManager';
-import type { PasswordEntry, FirebaseUser } from '@/types';
+import type { PasswordEntry, FirebaseUser, Group } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { PasswordList } from '@/components/password/PasswordList';
 import { AddEditPasswordDialog, type PasswordFormValues } from '@/components/password/AddEditPasswordDialog';
@@ -13,7 +13,6 @@ import { ClearAllPasswordsDialog } from '@/components/password/ClearAllPasswords
 import { SharePasswordDialog } from '@/components/password/SharePasswordDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-// import { Label } from '@/components/ui/label'; Remove Label as it's not used
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { useToast } from '@/hooks/use-toast';
@@ -39,10 +38,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
-
 import { auth, googleProvider } from '@/lib/firebase';
 import {
-
   signInWithPopup,
   signOut,
   onAuthStateChanged,
@@ -71,7 +68,8 @@ export default function HomePage() {
 
   const {
     passwords,
-    isLoading: passwordsLoading,
+    groups, // Get groups from the hook
+    isLoading: passwordsLoading, // This might need a more granular loading state if groups load separately
     error: passwordManagerError,
     addPassword,
     updatePassword,
@@ -83,6 +81,9 @@ export default function HomePage() {
     sharePassword,
     updateSharePermission,
     removeShare,
+    fetchGroups, // To manually refresh groups if needed, though it fetches on load
+    sharePasswordWithGroup,
+    unsharePasswordFromGroup,
   } = usePasswordManager(firebaseUser?.uid);
   const { toast } = useToast();
 
@@ -121,6 +122,7 @@ export default function HomePage() {
           setUserCategories([]);
         }
         setActiveTab('Todas');
+        // Groups are fetched by the hook on user change
       } else {
         setUserCategories([]);
         setActiveTab('Todas');
@@ -132,15 +134,12 @@ export default function HomePage() {
   useEffect(() => {
     if (firebaseUser && passwords.length > 0) {
       const categoriesFromPasswords = Array.from(new Set(passwords.map(p => p.categoria).filter(Boolean) as string[]));
-
       const currentCategories = JSON.parse(localStorage.getItem(`userCategories_${firebaseUser.uid}`) || '[]');
-      
       const combinedCategories = Array.from(new Set([...currentCategories, ...categoriesFromPasswords]
         .map(cat => cat.trim())
         .filter(cat => cat.length > 0)
         .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
       ));
-      
       if (JSON.stringify(combinedCategories) !== JSON.stringify(userCategories)) {
          setUserCategories(combinedCategories);
          localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(combinedCategories));
@@ -149,69 +148,37 @@ export default function HomePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [passwords, firebaseUser]);
 
-  // Sync passwordToShare with the main passwords list from the hook
   useEffect(() => {
     if (passwordToShare && passwords && passwords.length > 0) {
       const updatedVersionInList = passwords.find(p => p.id === passwordToShare.id);
-      // Update passwordToShare only if the instance in the main list is different (e.g., sharedWith updated)
-      // This prevents unnecessary re-renders if the object reference is already the same.
-      if (updatedVersionInList && updatedVersionInList !== passwordToShare) {
-        // A simple way to check for content change if references are tricky,
-        // though usually reference change from the hook's map operation is enough.
-        // For robustness, one might compare JSON.stringify(updatedVersionInList) !== JSON.stringify(passwordToShare)
-        // but that's heavier. The reference check should suffice if the hook always creates new objects on update.
+      if (updatedVersionInList && JSON.stringify(updatedVersionInList) !== JSON.stringify(passwordToShare)) {
         setPasswordToShare(updatedVersionInList);
-      } else if (!updatedVersionInList) {
-        // The password being shared/viewed was deleted or is no longer in the list
+      } else if (!updatedVersionInList && isShareDialogOpen) { // only if dialog is open and password disappears
         setPasswordToShare(null);
-        setIsShareDialogOpen(false); // Optionally close dialog
+        setIsShareDialogOpen(false);
+        toast({ title: "Senha não encontrada", description: "A senha que você estava gerenciando não foi encontrada. Pode ter sido excluída.", variant: "destructive" });
       }
     }
-  }, [passwords, passwordToShare]);
+  }, [passwords, passwordToShare, isShareDialogOpen, toast]);
 
 
   const handleFirebaseError = (error: AuthError) => {
     console.error("Firebase Auth Error:", error);
     let errorMessage = "Ocorreu um erro de autenticação.";
     switch (error.code) {
-      case 'auth/invalid-email':
-        errorMessage = "Formato de email inválido.";
-        break;
-      case 'auth/user-disabled':
-        errorMessage = "Esta conta de usuário foi desabilitada.";
-        break;
-      case 'auth/user-not-found':
-        errorMessage = "Nenhum usuário encontrado com este email.";
-        break;
-      case 'auth/wrong-password':
-        errorMessage = "Senha incorreta.";
-        break;
-      case 'auth/invalid-credential':
-        errorMessage = "Credenciais inválidas. Verifique os dados e tente novamente."; 
-        break;
-      case 'auth/email-already-in-use':
-        errorMessage = "Este email já está em uso por outra conta.";
-        break;
-      case 'auth/weak-password':
-        errorMessage = "A senha é muito fraca. Use pelo menos 6 caracteres.";
-        break;
-      case 'auth/operation-not-allowed':
-         errorMessage = "Operação não permitida. Login por este método pode estar desabilitado.";
-         break;
-      case 'auth/too-many-requests':
-        errorMessage = "Muitas tentativas falharam. Tente novamente mais tarde.";
-        break;
-      case 'auth/popup-closed-by-user':
-        errorMessage = "O pop-up de login foi fechado antes da conclusão.";
-        break;
-      case 'auth/account-exists-with-different-credential':
-        errorMessage = "Já existe uma conta com este endereço de e-mail, mas com um método de login diferente. Tente fazer login com o método original ou entre em contato com o suporte.";
-        break;
-      case 'auth/unauthorized-domain':
-        errorMessage = `O domínio do seu e-mail não está autorizado para esta aplicação. Por favor, use uma conta dos domínios permitidos: ${ALLOWED_GOOGLE_DOMAINS.join(', ')}.`;
-        break;
-      default:
-        errorMessage = (error as Error).message || "Ocorreu um erro de autenticação desconhecido.";
+      case 'auth/invalid-email': errorMessage = "Formato de email inválido."; break;
+      case 'auth/user-disabled': errorMessage = "Esta conta de usuário foi desabilitada."; break;
+      case 'auth/user-not-found': errorMessage = "Nenhum usuário encontrado com este email."; break;
+      case 'auth/wrong-password': errorMessage = "Senha incorreta."; break;
+      case 'auth/invalid-credential': errorMessage = "Credenciais inválidas. Verifique os dados e tente novamente."; break;
+      case 'auth/email-already-in-use': errorMessage = "Este email já está em uso por outra conta."; break;
+      case 'auth/weak-password': errorMessage = "A senha é muito fraca. Use pelo menos 6 caracteres."; break;
+      case 'auth/operation-not-allowed': errorMessage = "Operação não permitida. Login por este método pode estar desabilitado."; break;
+      case 'auth/too-many-requests': errorMessage = "Muitas tentativas falharam. Tente novamente mais tarde."; break;
+      case 'auth/popup-closed-by-user': errorMessage = "O pop-up de login foi fechado antes da conclusão."; break;
+      case 'auth/account-exists-with-different-credential': errorMessage = "Já existe uma conta com este endereço de e-mail, mas com um método de login diferente."; break;
+      case 'auth/unauthorized-domain': errorMessage = `O domínio do seu e-mail não está autorizado. Use domínios permitidos: ${ALLOWED_GOOGLE_DOMAINS.join(', ')}.`; break;
+      default: errorMessage = (error as Error).message || "Ocorreu um erro de autenticação desconhecido.";
     }
     setAuthError(errorMessage);
     toast({ title: "Erro de Autenticação", description: errorMessage, variant: "destructive"});
@@ -223,7 +190,6 @@ export default function HomePage() {
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const userEmail = result.user.email;
-
       if (userEmail) {
         const isAllowed = ALLOWED_GOOGLE_DOMAINS.some(domain => userEmail.endsWith(domain));
         if (!isAllowed) {
@@ -261,7 +227,7 @@ export default function HomePage() {
       toast({ title: "Não autenticado", description: "Você precisa estar logado para adicionar senhas.", variant: "destructive" });
       return;
     }
-    const entryToAdd: Omit<PasswordEntry, 'id' | 'userId' | 'ownerId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy'> = {
+    const entryToAdd: Omit<PasswordEntry, 'id' | 'userId' | 'ownerId' | 'sharedWith' | 'sharedWithGroupIds' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt'> = {
       nome: data.nome,
       login: data.login,
       senha: data.senha,
@@ -281,12 +247,11 @@ export default function HomePage() {
       toast({ title: "Não autenticado", description: "Você precisa estar logado para atualizar senhas.", variant: "destructive" });
       return;
     }
-    // Ensure all required fields for update are present, userId and ownerId will be handled/verified by backend
-    const entryToUpdate: Omit<PasswordEntry, 'userId' | 'ownerId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy'> & {id: string} = {
+    const entryToUpdate: Omit<PasswordEntry, 'userId' | 'ownerId' | 'sharedWith' | 'sharedWithGroupIds' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt'> & {id: string} = {
       id,
       nome: data.nome,
       login: data.login,
-      senha: data.senha, // Senha can be optional if not changing
+      senha: data.senha,
       categoria: data.categoria,
       customFields: data.customFields || [],
     };
@@ -297,7 +262,6 @@ export default function HomePage() {
       toast({ title: "Erro ao Atualizar", description: (e as Error).message || "Não foi possível atualizar a senha.", variant: "destructive" });
     }
   };
-
 
   const handleSubmitPasswordForm = async (data: PasswordFormValues, id?: string) => {
     if (id && editingPassword && 'id' in editingPassword && editingPassword.id === id) {
@@ -323,7 +287,7 @@ export default function HomePage() {
     try {
       await deletePassword(id);
       if (entryToDelete) {
-        toast({ title: "Sucesso!", description: `Senha para "${entryToDelete.nome}" (marcada como) deletada.`, variant: "destructive" });
+        toast({ title: "Sucesso!", description: `Senha para "${entryToDelete.nome}" marcada como deletada.`, variant: "destructive" });
       }
     } catch (e: any) {
       toast({ title: "Erro ao Deletar", description: (e as Error).message || "Não foi possível deletar a senha.", variant: "destructive" });
@@ -344,7 +308,7 @@ export default function HomePage() {
       if (result.importedCount > 0) {
            toast({ title: "Importação Concluída", description: `${result.importedCount} novas senhas importadas com sucesso.` });
       } else {
-           toast({ title: "Nenhuma Nova Senha", description: result.message || "Nenhuma senha nova foi importada. Podem ser duplicatas ou o arquivo estar vazio.", variant: "default" });
+           toast({ title: "Nenhuma Nova Senha", description: result.message || "Nenhuma senha nova foi importada.", variant: "default" });
       }
       setIsImportDialogOpen(false);
     } catch (e: any) {
@@ -359,7 +323,7 @@ export default function HomePage() {
     }
     try {
       await clearAllPasswords();
-      toast({ title: "Tudo Limpo!", description: "Todas as senhas foram (marcadas como) removidas.", variant: "destructive" });
+      toast({ title: "Tudo Limpo!", description: "Todas as senhas foram removidas.", variant: "destructive" });
       setIsClearAllDialogOpen(false);
     } catch (e: any) {
       toast({ title: "Erro ao Limpar", description: (e as Error).message || "Não foi possível limpar todas as senhas.", variant: "destructive" });
@@ -375,16 +339,18 @@ export default function HomePage() {
       toast({ title: "Nada para Exportar", description: "Não há senhas para exportar.", variant: "default" });
       return;
     }
-    const success = await exportPasswordsToCSV();
-    if (success) {
-      toast({ title: "Exportado!", description: "Suas senhas foram exportadas para senhas_backup.csv." });
-    } else {
-      toast({ title: "Erro na Exportação", description: "Não foi possível exportar as senhas.", variant: "destructive" });
+    try {
+        const success = await exportPasswordsToCSV();
+        if (success) {
+          toast({ title: "Exportado!", description: "Suas senhas foram exportadas para senhas_backup.csv." });
+        }
+    } catch (e: any) {
+        toast({ title: "Erro na Exportação", description: (e as Error).message || "Não foi possível exportar as senhas.", variant: "destructive" });
     }
   };
 
   const handleOpenAddPasswordDialog = () => {
-    setEditingPassword({ categoria: activeTab !== 'Todas' ? activeTab : "" }); // Pre-fill category if a tab is active
+    setEditingPassword({ categoria: activeTab !== 'Todas' ? activeTab : "" });
     setIsAddEditDialogOpen(true);
   };
 
@@ -415,9 +381,7 @@ export default function HomePage() {
 
   const handleConfirmDeleteCategory = useCallback(() => {
     if (!firebaseUser || !categoryToDelete) return;
-
     const isCategoryEmpty = !passwords.some(p => p.categoria?.toLowerCase() === categoryToDelete.toLowerCase());
-
     if (isCategoryEmpty) {
       const updatedCategories = userCategories.filter(cat => cat.toLowerCase() !== categoryToDelete.toLowerCase());
       setUserCategories(updatedCategories);
@@ -427,7 +391,7 @@ export default function HomePage() {
     } else {
       toast({
         title: "Exclusão Falhou",
-        description: `A categoria "${categoryToDelete}" não pode ser excluída pois contém senhas. Mova ou exclua as senhas primeiro.`,
+        description: `A categoria "${categoryToDelete}" não pode ser excluída pois contém senhas.`,
         variant: "destructive",
       });
     }
@@ -437,27 +401,22 @@ export default function HomePage() {
 
 
   const filteredPasswords = useMemo(() => {
-    let tempPasswords = passwords.filter(p => !p.isDeleted); // Only show non-deleted passwords
-
+    let tempPasswords = passwords.filter(p => !p.isDeleted); 
     if (activeTab !== 'Todas') {
       tempPasswords = tempPasswords.filter(p => p.categoria?.toLowerCase() === activeTab.toLowerCase());
     }
-
     if (searchTerm) {
       tempPasswords = tempPasswords.filter(p => {
         const lowerSearchTerm = searchTerm.toLowerCase();
-        if (p.nome.toLowerCase().includes(lowerSearchTerm)) return true;
-        if (p.login.toLowerCase().includes(lowerSearchTerm)) return true;
-        if (p.categoria && p.categoria.toLowerCase().includes(lowerSearchTerm)) return true;
-        if (p.customFields) {
-          for (const field of p.customFields) {
-            if (field.label.toLowerCase().includes(lowerSearchTerm)) return true;
-            if (field.value.toLowerCase().includes(lowerSearchTerm)) return true;
-          }
-        }
-        // Add search in sharedWith userIds if desired (optional, might be too noisy)
-        // if (p.sharedWith?.some(s => s.userId.toLowerCase().includes(lowerSearchTerm))) return true;
-        return false;
+        return (
+            p.nome.toLowerCase().includes(lowerSearchTerm) ||
+            p.login.toLowerCase().includes(lowerSearchTerm) ||
+            (p.categoria && p.categoria.toLowerCase().includes(lowerSearchTerm)) ||
+            (p.customFields && p.customFields.some(cf => 
+                cf.label.toLowerCase().includes(lowerSearchTerm) || 
+                cf.value.toLowerCase().includes(lowerSearchTerm)
+            ))
+        );
       });
     }
     return tempPasswords;
@@ -505,7 +464,7 @@ export default function HomePage() {
                 <ShieldAlert className="h-5 w-5" />
                 <AlertTitle>Erro de Conexão ou Dados</AlertTitle>
                 <AlertDescription>
-                  {passwordManagerError} Verifique os logs do servidor (backend), a conexão com o banco de dados (MongoDB URI, IP Allowlist no Atlas) e as configurações da API. Tente recarregar a página.
+                  {passwordManagerError} Verifique os logs do servidor, a conexão com o banco de dados e as configurações da API.
                 </AlertDescription>
               </Alert>
             )}
@@ -557,7 +516,6 @@ export default function HomePage() {
             </div>
 
             <div className="mb-4">
-               
                <div className="flex items-center border-b">
                   <ScrollArea className="w-full whitespace-nowrap">
                      <div className="flex space-x-1 pb-1">
@@ -588,25 +546,19 @@ export default function HomePage() {
                                     variant="ghost"
                                     size="icon"
                                     className="absolute top-1/2 right-0.5 -translate-y-1/2 h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-destructive/20"
-                                    
                                  >
                                     <div
                                        role="button"
                                        tabIndex={0} 
                                        onClick={(e) => {
-                                       e.stopPropagation(); 
-                                       e.preventDefault();
-                                       setCategoryToDelete(category);
-                                       setIsDeleteCategoryDialogOpen(true);
+                                       e.stopPropagation(); e.preventDefault();
+                                       setCategoryToDelete(category); setIsDeleteCategoryDialogOpen(true);
                                        }}
                                        onKeyDown={(e) => { 
                                        if (e.key === 'Enter' || e.key === ' ') {
-                                          e.stopPropagation();
-                                          e.preventDefault();
-                                          setCategoryToDelete(category);
-                                          setIsDeleteCategoryDialogOpen(true);
-                                       }
-                                       }}
+                                          e.stopPropagation(); e.preventDefault();
+                                          setCategoryToDelete(category); setIsDeleteCategoryDialogOpen(true);
+                                       }}}
                                        title={`Excluir categoria ${category}`}
                                     >
                                        <X size={12} className="text-destructive/80 hover:text-destructive" />
@@ -629,30 +581,18 @@ export default function HomePage() {
                      <AlertDialogContent>
                         <AlertDialogHeader>
                            <AlertDialogTitle>Adicionar Nova Categoria</AlertDialogTitle>
-                           <AlertDialogDescription>
-                           Digite o nome para a nova aba de categoria.
-                           </AlertDialogDescription>
+                           <AlertDialogDescription>Digite o nome para a nova aba de categoria.</AlertDialogDescription>
                         </AlertDialogHeader>
                         <Input
                            placeholder="Nome da Categoria"
                            value={newCategoryName}
                            onChange={(e) => setNewCategoryName(e.target.value)}
                            onKeyDown={(e) => {
-                           if (e.key === 'Enter') {
-                                 e.preventDefault();
-                                 if(handleAddCategory()){
-                                 setIsAddCategoryDialogOpen(false);
-                                 }
-                           }
-                           }}
+                           if (e.key === 'Enter') { e.preventDefault(); if(handleAddCategory()){ setIsAddCategoryDialogOpen(false); }}}}
                         />
                         <AlertDialogFooter>
                            <AlertDialogCancel onClick={() => { setNewCategoryName(''); setIsAddCategoryDialogOpen(false); }}>Cancelar</AlertDialogCancel>
-                           <AlertDialogAction onClick={() => {
-                           if(handleAddCategory()){
-                                 setIsAddCategoryDialogOpen(false);
-                           }
-                           }}>Adicionar</AlertDialogAction>
+                           <AlertDialogAction onClick={() => { if(handleAddCategory()){ setIsAddCategoryDialogOpen(false); }}}>Adicionar</AlertDialogAction>
                         </AlertDialogFooter>
                      </AlertDialogContent>
                   </AlertDialog>
@@ -699,22 +639,26 @@ export default function HomePage() {
         onOpenChange={setIsClearAllDialogOpen}
         onConfirm={handleClearAllPasswords}
       />
-      <SharePasswordDialog
-        isOpen={isShareDialogOpen}
-        onOpenChange={setIsShareDialogOpen}
-        passwordEntry={passwordToShare}
-        currentUserId={firebaseUser?.uid}
-        onSharePassword={sharePassword}
-        onUpdateShare={updateSharePermission}
-        onRemoveShare={removeShare}
-      />
+      {isShareDialogOpen && passwordToShare && firebaseUser && ( // Ensure all props are ready
+        <SharePasswordDialog
+            isOpen={isShareDialogOpen}
+            onOpenChange={setIsShareDialogOpen}
+            passwordEntry={passwordToShare}
+            currentUserId={firebaseUser.uid}
+            userGroups={groups} // Pass available groups
+            onSharePassword={sharePassword}
+            onUpdateShare={updateSharePermission}
+            onRemoveShare={removeShare}
+            onShareWithGroup={sharePasswordWithGroup}
+            onUnshareFromGroup={unsharePasswordFromGroup}
+        />
+      )}
        <AlertDialog open={isDeleteCategoryDialogOpen} onOpenChange={setIsDeleteCategoryDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir Categoria "{categoryToDelete}"?</AlertDialogTitle>
             <AlertDialogDescription>
-              Você tem certeza que deseja excluir esta categoria? <br/>
-              Somente categorias vazias podem ser excluídas. Se esta categoria não estiver vazia, a exclusão falhará. As senhas existentes nesta categoria não serão apagadas, mas ficarão sem categoria definida.
+              Você tem certeza que deseja excluir esta categoria? Somente categorias vazias podem ser excluídas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -727,9 +671,8 @@ export default function HomePage() {
       </AlertDialog>
 
       <footer className="text-center py-4 text-sm text-muted-foreground border-t mt-auto">
-        SenhaFacil &copy; {currentYear !== null ? currentYear : '----'}
+        SenhaFacil &copy; {currentYear !== null ? currentYear : new Date().getFullYear()}
       </footer>
     </div>
   );
 }
-

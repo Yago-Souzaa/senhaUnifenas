@@ -11,7 +11,7 @@ export interface SharedUser {
 
 export interface GroupMember {
   userId: string; // Firebase UID of the member
-  role: 'member' | 'admin'; // Role within the group (admin might manage members, owner manages group)
+  role: 'member' | 'admin'; // Role within the group
   addedAt?: Date;
   addedBy?: string; // UID of user who added this member
 }
@@ -39,6 +39,7 @@ export interface HistoryEntry {
     | 'group_deleted'
     | 'group_member_added'
     | 'group_member_removed'
+    | 'group_member_role_updated'
     | 'password_shared_with_group'
     | 'password_unshared_from_group';
   userId: string; // UID of the user who performed the action
@@ -49,7 +50,7 @@ export interface HistoryEntry {
 export interface PasswordEntry {
   id: string; 
   ownerId: string; 
-  userId?: string; 
+  userId?: string; // Legacy field, ownerId is preferred
 
   nome: string;
   login: string;
@@ -72,3 +73,4 @@ export interface PasswordEntry {
 }
 
 export type FirebaseUser = FirebaseUserType;
+

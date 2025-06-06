@@ -6,7 +6,7 @@ import type { PasswordEntry } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban, EllipsisVertical, Check, Share2, Users } from 'lucide-react';
+import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban, EllipsisVertical, Check, Share2, Users, ShieldCheck } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -63,12 +63,17 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
 
   const shouldShowCategoryBadge = entry.categoria && (activeTab === 'Todas' || activeTab.toLowerCase() !== entry.categoria.toLowerCase());
 
-  // Use ownerId if present, otherwise fallback to legacy userId to determine ownership
   const effectiveOwnerId = entry.ownerId || entry.userId;
   const isOwner = !!currentUserId && effectiveOwnerId === currentUserId;
 
+  // Determine edit/delete rights considering direct shares and group shares (assuming group admins can edit/delete if password shared with group)
+  // For simplicity, group share currently doesn't grant edit/delete on password, only owner or direct 'full' share does.
+  // This logic would need to be enhanced if group admins should manage passwords shared with their group.
   const canEdit = isOwner || (!!currentUserId && entry.sharedWith?.some(s => s.userId === currentUserId && s.permission === 'full'));
   const canDelete = isOwner || (!!currentUserId && entry.sharedWith?.some(s => s.userId === currentUserId && s.permission === 'full'));
+
+  const isSharedDirectly = entry.sharedWith && entry.sharedWith.length > 0;
+  const isSharedWithGroups = entry.sharedWithGroupIds && entry.sharedWithGroupIds.length > 0;
 
 
   return (
@@ -98,7 +103,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
               </div>
             </div>
           </div>
-          <div className="flex items-center mt-0.5 space-x-2">
+          <div className="flex items-center mt-0.5 space-x-2 flex-wrap">
             {shouldShowCategoryBadge && (
               <div className="flex items-center">
                 <Badge variant="secondary" className="text-xs py-0.5 px-1.5">
@@ -120,9 +125,14 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
                 </Button>
               </div>
             )}
-            {entry.sharedWith && entry.sharedWith.length > 0 && (
-                 <Badge variant={isOwner ? "outline" : "default"} className="text-xs py-0.5 px-1.5 cursor-default" title={`Compartilhado com ${entry.sharedWith.length} usuário(s)`}>
-                    <Users size={12} className="mr-1"/> {entry.sharedWith.length}
+            {isSharedDirectly && (
+                 <Badge variant={isOwner ? "outline" : "default"} className="text-xs py-0.5 px-1.5 cursor-default" title={`Compartilhado com ${entry.sharedWith?.length} usuário(s)`}>
+                    <Users size={12} className="mr-1"/> {entry.sharedWith?.length} {entry.sharedWith?.length === 1 ? "Usuário" : "Usuários"}
+                </Badge>
+            )}
+            {isSharedWithGroups && (
+                 <Badge variant={isOwner ? "outline" : "default"} className="text-xs py-0.5 px-1.5 cursor-default bg-teal-600 text-white hover:bg-teal-700" title={`Compartilhado com ${entry.sharedWithGroupIds?.length} grupo(s)`}>
+                    <ShieldCheck size={12} className="mr-1"/> {entry.sharedWithGroupIds?.length} {entry.sharedWithGroupIds?.length === 1 ? "Grupo" : "Grupos"}
                 </Badge>
             )}
           </div>
@@ -138,50 +148,52 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                <DropdownMenuLabel>Ações da Senha</DropdownMenuLabel>
                 <DropdownMenuSeparator />
 
                 {canEdit && (
                   <DropdownMenuItem onClick={() => onEdit(entry)} className="cursor-pointer">
                     <Edit2 size={16} className="mr-2" />
-                    Editar
+                    Editar Detalhes
                   </DropdownMenuItem>
                 )}
+                {/* Share dialog is always available for owners, or if they have full permission to then manage shares of that entry.
+                    For now, only owner can initiate any kind of share (direct or group).
+                */}
                 {isOwner && (
                   <DropdownMenuItem onClick={() => onOpenShareDialog(entry)} className="cursor-pointer">
                     <Share2 size={16} className="mr-2" />
-                    Compartilhar
+                    Compartilhar / Gerenciar
                   </DropdownMenuItem>
                 )}
-
-                {/* Separador antes de Deletar se houver itens de edição/compartilhamento E Deletar estiver disponível */}
+                
                 {(canEdit || isOwner) && canDelete && <DropdownMenuSeparator />}
 
                 {canDelete && (
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
-                      onSelect={(e) => e.preventDefault()}
+                      onSelect={(e) => e.preventDefault()} // Prevent closing menu before dialog opens
                     >
                       <Trash2 size={16} className="mr-2" />
-                      Deletar
+                      Deletar Senha
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
                 )}
 
-                {/* Se nenhuma ação estiver disponível, mostrar uma mensagem */}
+                {/* If no action is available for this user for this password */}
                 {!canEdit && !isOwner && !canDelete && (
-                  <DropdownMenuItem disabled className="text-muted-foreground px-2 py-1.5">
-                    Nenhuma ação disponível
+                   <DropdownMenuItem disabled className="text-muted-foreground px-2 py-1.5">
+                    Apenas Leitura
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+                <AlertDialogTitle>Deletar Senha "{entry.nome}"?</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Esta ação não pode ser desfeita. Isso marcará a senha de <strong className="font-semibold">{entry.nome}</strong> como excluída.
+                  Esta ação marcará a senha como excluída e ela não será mais visível na lista principal. Você tem certeza?
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
