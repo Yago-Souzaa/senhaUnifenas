@@ -16,10 +16,12 @@ import type { FirebaseUser } from '@/types';
 export default function SettingsPage() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [currentYear, setCurrentYear] = useState<number | null>(null);
   const { toast } = useToast();
   const router = useRouter();
 
   useEffect(() => {
+    setCurrentYear(new Date().getFullYear());
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
       setAuthLoading(false);
@@ -68,7 +70,7 @@ export default function SettingsPage() {
           </Card>
         </main>
          <footer className="text-center py-4 text-sm text-muted-foreground border-t mt-auto">
-            SenhaFacil &copy; {new Date().getFullYear()}
+            SenhaFacil &copy; {currentYear !== null ? currentYear : ''}
         </footer>
       </div>
     );
@@ -121,7 +123,7 @@ export default function SettingsPage() {
         </Card>
       </main>
       <footer className="text-center py-4 text-sm text-muted-foreground border-t mt-auto">
-        SenhaFacil &copy; {new Date().getFullYear()}
+        SenhaFacil &copy; {currentYear !== null ? currentYear : ''}
       </footer>
     </div>
   );

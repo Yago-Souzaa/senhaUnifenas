@@ -67,6 +67,7 @@ export default function HomePage() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [currentYear, setCurrentYear] = useState<number | null>(null);
 
   const {
     passwords,
@@ -104,6 +105,7 @@ export default function HomePage() {
 
 
   useEffect(() => {
+    setCurrentYear(new Date().getFullYear());
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setFirebaseUser(user);
       setAuthLoading(false);
@@ -702,7 +704,7 @@ export default function HomePage() {
       </AlertDialog>
 
       <footer className="text-center py-4 text-sm text-muted-foreground border-t mt-auto">
-        SenhaFacil &copy; {new Date().getFullYear()}
+        SenhaFacil &copy; {currentYear !== null ? currentYear : ''}
       </footer>
     </div>
   );
