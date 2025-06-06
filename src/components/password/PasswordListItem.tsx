@@ -6,7 +6,7 @@ import type { PasswordEntry } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban, EllipsisVertical, Check, Share2, Users } from 'lucide-react'; 
+import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban, EllipsisVertical, Check, Share2, Users } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,11 +60,15 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
         toast({ title: "Erro ao copiar", description: "Não foi possível copiar para a área de transferência.", variant: "destructive" });
       });
   };
-  
+
   const shouldShowCategoryBadge = entry.categoria && (activeTab === 'Todas' || activeTab.toLowerCase() !== entry.categoria.toLowerCase());
-  const isOwner = entry.ownerId === currentUserId;
-  const canEdit = isOwner || entry.sharedWith?.some(s => s.userId === currentUserId && s.permission === 'full');
-  const canDelete = isOwner || entry.sharedWith?.some(s => s.userId === currentUserId && s.permission === 'full');
+
+  // Use ownerId if present, otherwise fallback to legacy userId to determine ownership
+  const effectiveOwnerId = entry.ownerId || entry.userId;
+  const isOwner = !!currentUserId && effectiveOwnerId === currentUserId;
+
+  const canEdit = isOwner || (!!currentUserId && entry.sharedWith?.some(s => s.userId === currentUserId && s.permission === 'full'));
+  const canDelete = isOwner || (!!currentUserId && entry.sharedWith?.some(s => s.userId === currentUserId && s.permission === 'full'));
 
 
   return (
@@ -72,7 +76,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
       <CardHeader className="py-3 px-4 flex flex-row justify-between items-start gap-3">
         <div className="flex-grow min-w-0">
           <div className="flex items-start justify-between">
-            <div className="min-w-0"> 
+            <div className="min-w-0">
               <div className="flex items-center">
                 <CardTitle className="font-headline text-lg text-primary truncate mr-1" title={entry.nome}>
                   {entry.nome}
@@ -133,32 +137,43 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
                   <span className="sr-only">Mais ações</span>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>Ações</DropdownMenuLabel>
                 <DropdownMenuSeparator />
+
                 {canEdit && (
                   <DropdownMenuItem onClick={() => onEdit(entry)} className="cursor-pointer">
                     <Edit2 size={16} className="mr-2" />
                     Editar
                   </DropdownMenuItem>
                 )}
-                {isOwner && ( 
+                {isOwner && (
                   <DropdownMenuItem onClick={() => onOpenShareDialog(entry)} className="cursor-pointer">
                     <Share2 size={16} className="mr-2" />
                     Compartilhar
                   </DropdownMenuItem>
                 )}
-                {(canEdit || isOwner) && entry.sharedWith && entry.sharedWith.length > 0 && <DropdownMenuSeparator />}
+
+                {/* Separador antes de Deletar se houver itens de edição/compartilhamento E Deletar estiver disponível */}
+                {(canEdit || isOwner) && canDelete && <DropdownMenuSeparator />}
+
                 {canDelete && (
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
-                      onSelect={(e) => e.preventDefault()} 
+                      onSelect={(e) => e.preventDefault()}
                     >
                       <Trash2 size={16} className="mr-2" />
                       Deletar
                     </DropdownMenuItem>
                   </AlertDialogTrigger>
+                )}
+
+                {/* Se nenhuma ação estiver disponível, mostrar uma mensagem */}
+                {!canEdit && !isOwner && !canDelete && (
+                  <DropdownMenuItem disabled className="text-muted-foreground px-2 py-1.5">
+                    Nenhuma ação disponível
+                  </DropdownMenuItem>
                 )}
               </DropdownMenuContent>
             </DropdownMenu>
