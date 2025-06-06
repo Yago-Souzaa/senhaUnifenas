@@ -170,14 +170,11 @@ export default function GroupsPage() {
         return;
     }
     try {
-        await addGroupMember(editingGroup.id, memberUidToAdd.trim(), memberRole);
+        const updatedGroupFromHook = await addGroupMember(editingGroup.id, memberUidToAdd.trim(), memberRole);
         toast({ title: "Membro Adicionado", description: `Usuário adicionado ao grupo "${editingGroup.name}".` });
         setMemberUidToAdd('');
         setMemberRole('member');
-        // The group state in usePasswordManager will update, triggering a re-render
-        // We need to update the editingGroup state specifically if the dialog remains open
-        const updatedGroup = groups.find(g => g.id === editingGroup.id);
-        if (updatedGroup) setEditingGroup(updatedGroup);
+        setEditingGroup(updatedGroupFromHook); // Directly use the updated group from the hook
 
     } catch (e: any) {
         toast({ title: "Erro ao Adicionar Membro", description: e.message || "Não foi possível adicionar o membro.", variant: "destructive" });
@@ -187,11 +184,15 @@ export default function GroupsPage() {
   const handleRemoveMember = async (groupId: string, groupName: string, memberUid: string) => {
     if (!editingGroup) return;
     try {
-        await removeGroupMember(groupId, memberUid);
+        const updatedGroupFromHook = await removeGroupMember(groupId, memberUid);
         toast({ title: "Membro Removido", description: `Usuário removido do grupo "${groupName}".` });
-        const updatedGroup = groups.find(g => g.id === groupId);
-        if (updatedGroup) setEditingGroup(updatedGroup);
-        else setIsManageMembersDialogOpen(false); // Close dialog if group somehow disappears
+        if (updatedGroupFromHook) {
+          setEditingGroup(updatedGroupFromHook);
+        } else {
+          // This case should ideally not happen if the hook handles group removal from its state correctly
+          setIsManageMembersDialogOpen(false); 
+          await fetchGroups(); // Re-fetch all groups if the specific one is gone
+        }
     } catch (e: any) {
         toast({ title: "Erro ao Remover Membro", description: e.message || "Não foi possível remover o membro.", variant: "destructive" });
     }
@@ -200,11 +201,9 @@ export default function GroupsPage() {
   const handleUpdateMemberRole = async (groupId: string, memberUid: string, newRole: 'member' | 'admin') => {
     if (!editingGroup) return;
     try {
-        await updateGroupMemberRole(groupId, memberUid, newRole);
+        const updatedGroupFromHook = await updateGroupMemberRole(groupId, memberUid, newRole);
         toast({ title: "Função Atualizada", description: `Função do membro atualizada no grupo.` });
-        const updatedGroup = groups.find(g => g.id === groupId);
-        if (updatedGroup) setEditingGroup(updatedGroup);
-        else setIsManageMembersDialogOpen(false); 
+        setEditingGroup(updatedGroupFromHook);
     } catch (e: any) {
         toast({ title: "Erro ao Atualizar Função", description: e.message || "Não foi possível atualizar a função do membro.", variant: "destructive" });
     }
