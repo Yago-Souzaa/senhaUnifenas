@@ -86,7 +86,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       setPasswords(prev => [...prev, newPassword]);
       return newPassword;
     } catch (err: any) {
-      console.error("Failed to add password:", err);
+      // console.error("Failed to add password:", err); // Intentionally keep for broader add issues
       setError(err.message || 'An unknown error occurred while adding password.');
       throw err;
     } finally {
@@ -121,7 +121,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       setPasswords(prev => prev.map(p => p.id === returnedEntry.id ? returnedEntry : p));
       return returnedEntry;
     } catch (err: any) {
-      console.error("Failed to update password:", err);
+      // console.error("Failed to update password:", err);
       setError(err.message || 'An unknown error occurred while updating password.');
       throw err;
     } finally {
@@ -148,16 +148,10 @@ export function usePasswordManager(currentUserId?: string | null) {
         const errorMessage = await parseErrorResponse(response, `Failed to delete password: ${response.statusText}`);
         throw new Error(errorMessage);
       }
-      // Soft delete: update local state to reflect the change
-      // The API response for DELETE (soft delete) should ideally return the updated entry or a success message.
-      // For simplicity, let's assume the API confirms soft delete and we update locally.
-      // Or, the fetchPasswords could be re-called, but that's less efficient.
-      // The current API returns a message. We can update the local entry if API returned it, or filter if it was a hard delete (which it isn't anymore).
-      // Let's update the local state to mark it as deleted to match backend behavior.
       setPasswords(prev => prev.map(p => p.id === id ? { ...p, isDeleted: true } : p).filter(p => !p.isDeleted));
 
     } catch (err: any) {
-      console.error("Failed to delete password:", err);
+      // console.error("Failed to delete password:", err);
       setError(err.message || 'An unknown error occurred while deleting password.');
       throw err;
     } finally {
@@ -195,7 +189,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       await fetchPasswords();
       return { importedCount: result.importedCount, message: result.message };
     } catch (err: any) {
-      console.error("Failed to import passwords:", err);
+      // console.error("Failed to import passwords:", err);
       setError(err.message || 'An unknown error occurred during import.');
       throw err;
     } finally {
@@ -232,7 +226,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       window.URL.revokeObjectURL(url);
       return true;
     } catch (err: any) {
-      console.error("Failed to export passwords:", err);
+      // console.error("Failed to export passwords:", err);
       setError(err.message || 'An unknown error occurred during export.');
       return false; 
     } finally {
@@ -282,10 +276,9 @@ export function usePasswordManager(currentUserId?: string | null) {
         const errorMessage = await parseErrorResponse(response, `Failed to clear passwords: ${response.statusText}`);
         throw new Error(errorMessage);
       }
-      // Soft delete all: update local state to reflect the change.
       setPasswords(prev => prev.map(p => ({...p, isDeleted: true })).filter(p => !p.isDeleted));
     } catch (err: any) {
-      console.error("Failed to clear passwords:", err);
+      // console.error("Failed to clear passwords:", err);
       setError(err.message || 'An unknown error occurred while clearing passwords.');
       throw err;
     } finally {
@@ -320,9 +313,9 @@ export function usePasswordManager(currentUserId?: string | null) {
       setPasswords(prev => prev.map(p => p.id === passwordId ? { ...p, sharedWith: sharedWith } : p));
       return sharedWith;
     } catch (err: any) {
-      console.error("Failed to share password:", err);
+      // console.error("Failed to share password:", err); // Removed to prevent Next.js overlay for this handled error
       setError(err.message || 'An unknown error occurred while sharing password.');
-      throw err;
+      throw err; // Error is still re-thrown to be caught by the dialog
     } finally {
       setIsLoading(false);
     }
@@ -353,7 +346,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       setPasswords(prev => prev.map(p => p.id === passwordId ? { ...p, sharedWith: sharedWith } : p));
       return sharedWith;
     } catch (err: any) {
-      console.error("Failed to update share permission:", err);
+      // console.error("Failed to update share permission:", err);
       setError(err.message || 'An unknown error occurred while updating share permission.');
       throw err;
     } finally {
@@ -384,7 +377,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       setPasswords(prev => prev.map(p => p.id === passwordId ? { ...p, sharedWith: sharedWith } : p));
       return sharedWith;
     } catch (err: any) {
-      console.error("Failed to remove share:", err);
+      // console.error("Failed to remove share:", err);
       setError(err.message || 'An unknown error occurred while removing share.');
       throw err;
     } finally {
@@ -411,6 +404,3 @@ export function usePasswordManager(currentUserId?: string | null) {
     removeShare,
   };
 }
-
-
-    
