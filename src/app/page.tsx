@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, FormEvent, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { usePasswordManager } from '@/hooks/usePasswordManager';
 import type { PasswordEntry, FirebaseUser } from '@/types';
 import { Header } from '@/components/layout/Header';
@@ -16,7 +16,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, XCircle, KeyRound, EllipsisVertical, FolderKanban, Plus, X } from 'lucide-react';
+import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, KeyRound, EllipsisVertical, FolderKanban, Plus, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -87,7 +87,6 @@ export default function HomePage() {
   const [isClearAllDialogOpen, setIsClearAllDialogOpen] = useState(false);
   const [editingPassword, setEditingPassword] = useState<PasswordEntry | Partial<PasswordEntry> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [showSecurityNotice, setShowSecurityNotice] = useState(true);
 
   const [userCategories, setUserCategories] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<string>('Todas');
@@ -461,23 +460,6 @@ export default function HomePage() {
           </div>
         ) : (
           <>
-            {showSecurityNotice && (
-             <div className="mb-6 p-4 border bg-card rounded-lg shadow-lg relative">
-                <div className="flex items-start">
-                  <ShieldAlert className="h-6 w-6 text-primary mr-3 shrink-0" />
-                  <div className="flex-grow">
-                    <h3 className="text-md font-semibold text-card-foreground font-headline">Aviso de Segurança</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Este aplicativo agora armazena senhas em um banco de dados central. Certifique-se de que o acesso ao banco de dados e à aplicação esteja devidamente protegido conforme as políticas da sua intranet. As senhas são associadas ao seu email de login.
-                    </p>
-                  </div>
-                  <Button variant="ghost" size="icon" onClick={() => setShowSecurityNotice(false)} className="ml-2 h-6 w-6 text-muted-foreground hover:text-foreground absolute top-3 right-3">
-                    <XCircle size={18} />
-                  </Button>
-                </div>
-              </div>
-            )}
-
             {passwordManagerError && (
              <Alert variant="destructive" className="mb-4">
                 <ShieldAlert className="h-5 w-5" />
