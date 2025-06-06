@@ -192,8 +192,10 @@ export default function GroupsPage() {
         if (updatedGroupFromHook) {
           setEditingGroup(updatedGroupFromHook);
         } else {
+          // Fallback if hook doesn't return group (e.g. group deleted by another action)
+          // This case should be less common now that removeGroupMember returns the updated group.
           setIsManageMembersDialogOpen(false); 
-          await fetchGroups(); 
+          await fetchGroups(); // Re-fetch all groups as a safeguard
         }
     } catch (e: any) {
         toast({ title: "Erro ao Remover Membro", description: e.message || "Não foi possível remover o membro.", variant: "destructive" });
@@ -253,6 +255,12 @@ export default function GroupsPage() {
     <div className="min-h-screen flex flex-col">
       <Header user={firebaseUser} onLogout={handleLogoutFirebase} />
       <main className="container mx-auto py-8 px-4 flex-grow">
+        <Button variant="ghost" asChild className="mb-6 text-primary hover:bg-primary/10 hover:text-primary">
+          <Link href="/">
+            <ArrowLeft size={18} className="mr-2" />
+            Voltar para Início
+          </Link>
+        </Button>
         <div className="flex justify-between items-center mb-6">
             <h2 className="text-3xl font-headline text-primary flex items-center gap-2">
                 <Users size={30}/> Meus Grupos
@@ -522,3 +530,5 @@ export default function GroupsPage() {
   );
 }
 
+
+    
