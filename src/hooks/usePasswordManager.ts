@@ -62,13 +62,12 @@ export function usePasswordManager(currentUserId?: string | null) {
   const addPassword = useCallback(async (entryData: Omit<PasswordEntry, 'id' | 'ownerId' | 'userId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy'>) => {
     if (!currentUserId) {
       const err = new Error('User not authenticated');
-      setError(err.message);
+      // setError(err.message); // Specific operation error, handled by caller
       throw err;
     }
     setIsLoading(true);
-    setError(null);
+    // setError(null); // Clear global error for this specific operation
     try {
-      // ownerId, createdBy, history, etc., will be set by the backend
       const payload = { ...entryData }; 
       const response = await fetch(API_BASE_URL, {
         method: 'POST',
@@ -86,8 +85,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       setPasswords(prev => [...prev, newPassword]);
       return newPassword;
     } catch (err: any) {
-      // console.error("Failed to add password:", err); // Intentionally keep for broader add issues
-      setError(err.message || 'An unknown error occurred while adding password.');
+      // setError(err.message || 'An unknown error occurred while adding password.'); // Specific operation error, handled by caller
       throw err;
     } finally {
       setIsLoading(false);
@@ -97,13 +95,12 @@ export function usePasswordManager(currentUserId?: string | null) {
   const updatePassword = useCallback(async (updatedEntry: Omit<PasswordEntry, 'ownerId' | 'userId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy'> & { id: string }) => {
     if (!currentUserId) {
       const err = new Error('User not authenticated');
-      setError(err.message);
+      // setError(err.message); // Specific operation error, handled by caller
       throw err;
     }
     setIsLoading(true);
-    setError(null);
+    // setError(null); // Clear global error for this specific operation
     try {
-      // Backend will handle ownerId check and other fields like history, lastModifiedBy
       const payload = { ...updatedEntry }; 
       const response = await fetch(`${API_BASE_URL}/${updatedEntry.id}`, {
         method: 'PUT',
@@ -121,8 +118,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       setPasswords(prev => prev.map(p => p.id === returnedEntry.id ? returnedEntry : p));
       return returnedEntry;
     } catch (err: any) {
-      // console.error("Failed to update password:", err);
-      setError(err.message || 'An unknown error occurred while updating password.');
+      // setError(err.message || 'An unknown error occurred while updating password.'); // Specific operation error, handled by caller
       throw err;
     } finally {
       setIsLoading(false);
@@ -132,11 +128,11 @@ export function usePasswordManager(currentUserId?: string | null) {
   const deletePassword = useCallback(async (id: string) => {
     if (!currentUserId) {
       const err = new Error('User not authenticated');
-      setError(err.message);
+      // setError(err.message); // Specific operation error, handled by caller
       throw err;
     }
     setIsLoading(true);
-    setError(null);
+    // setError(null); // Clear global error for this specific operation
     try {
       const response = await fetch(`${API_BASE_URL}/${id}`, {
         method: 'DELETE',
@@ -151,8 +147,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       setPasswords(prev => prev.map(p => p.id === id ? { ...p, isDeleted: true } : p).filter(p => !p.isDeleted));
 
     } catch (err: any) {
-      // console.error("Failed to delete password:", err);
-      setError(err.message || 'An unknown error occurred while deleting password.');
+      // setError(err.message || 'An unknown error occurred while deleting password.'); // Specific operation error, handled by caller
       throw err;
     } finally {
       setIsLoading(false);
@@ -162,11 +157,11 @@ export function usePasswordManager(currentUserId?: string | null) {
   const importPasswords = useCallback(async (file: File): Promise<{ importedCount: number, message?: string }> => {
     if (!currentUserId) {
       const err = new Error('User not authenticated');
-      setError(err.message);
+      // setError(err.message); // Specific operation error, handled by caller
       throw err;
     }
     setIsLoading(true);
-    setError(null);
+    // setError(null); // Clear global error for this specific operation
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -176,7 +171,7 @@ export function usePasswordManager(currentUserId?: string | null) {
         method: 'POST',
         body: formData,
         headers: {
-           'X-User-ID': currentUserId,
+           'X-User-ID': currentUserId, // Still good to pass for backend consistency if needed, though form has it
         }
       });
 
@@ -186,11 +181,10 @@ export function usePasswordManager(currentUserId?: string | null) {
         throw new Error(result.message || `Failed to import passwords: ${response.statusText}`);
       }
       
-      await fetchPasswords();
+      await fetchPasswords(); // Refresh list after import
       return { importedCount: result.importedCount, message: result.message };
     } catch (err: any) {
-      // console.error("Failed to import passwords:", err);
-      setError(err.message || 'An unknown error occurred during import.');
+      // setError(err.message || 'An unknown error occurred during import.'); // Specific operation error, handled by caller
       throw err;
     } finally {
       setIsLoading(false);
@@ -199,11 +193,11 @@ export function usePasswordManager(currentUserId?: string | null) {
   
   const exportPasswordsToCSV = useCallback(async (): Promise<boolean> => {
     if (!currentUserId) {
-      setError('User not authenticated for export.');
-      return false;
+      // setError('User not authenticated for export.'); // Can be handled by caller with a toast
+      return false; // Indicate failure
     }
     setIsLoading(true);
-    setError(null);
+    setError(null); // Clear global error for this operation, if any
     try {
       const response = await fetch(`${API_BASE_URL}/export`, {
         headers: {
@@ -212,7 +206,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, `Failed to export passwords: ${response.statusText}`);
-        throw new Error(errorMessage);
+        throw new Error(errorMessage); // Caller will handle this with a toast
       }
       
       const blob = await response.blob();
@@ -226,9 +220,8 @@ export function usePasswordManager(currentUserId?: string | null) {
       window.URL.revokeObjectURL(url);
       return true;
     } catch (err: any) {
-      // console.error("Failed to export passwords:", err);
-      setError(err.message || 'An unknown error occurred during export.');
-      return false; 
+      // setError(err.message || 'An unknown error occurred during export.'); // Handled by caller with toast
+      throw err; // Re-throw for caller to handle
     } finally {
       setIsLoading(false);
     }
@@ -260,11 +253,11 @@ export function usePasswordManager(currentUserId?: string | null) {
   const clearAllPasswords = useCallback(async () => {
     if (!currentUserId) {
       const err = new Error('User not authenticated');
-      setError(err.message);
+      // setError(err.message); // Handled by caller
       throw err;
     }
     setIsLoading(true);
-    setError(null);
+    // setError(null); // Clear global error
     try {
       const response = await fetch(`${API_BASE_URL}/clear`, {
         method: 'POST',
@@ -276,26 +269,25 @@ export function usePasswordManager(currentUserId?: string | null) {
         const errorMessage = await parseErrorResponse(response, `Failed to clear passwords: ${response.statusText}`);
         throw new Error(errorMessage);
       }
-      setPasswords(prev => prev.map(p => ({...p, isDeleted: true })).filter(p => !p.isDeleted));
+      // Mark all as deleted locally, or refetch
+      setPasswords(prev => prev.map(p => ({...p, isDeleted: true })).filter(p => !p.isDeleted)); 
     } catch (err: any) {
-      // console.error("Failed to clear passwords:", err);
-      setError(err.message || 'An unknown error occurred while clearing passwords.');
+      // setError(err.message || 'An unknown error occurred while clearing passwords.'); // Handled by caller
       throw err;
     } finally {
       setIsLoading(false);
     }
   }, [currentUserId]);
 
-  // --- Funções de Compartilhamento ---
 
   const sharePassword = useCallback(async (passwordId: string, userIdToShareWith: string, permission: 'read' | 'full'): Promise<SharedUser[] | undefined> => {
     if (!currentUserId) {
       const err = new Error('User not authenticated to share password');
-      setError(err.message);
+      // setError(err.message); // Error handled by SharePasswordDialog
       throw err;
     }
     setIsLoading(true);
-    setError(null);
+    // setError(null); // Clear global error for this operation
     try {
       const response = await fetch(`${API_BASE_URL}/${passwordId}/share`, {
         method: 'POST',
@@ -313,9 +305,8 @@ export function usePasswordManager(currentUserId?: string | null) {
       setPasswords(prev => prev.map(p => p.id === passwordId ? { ...p, sharedWith: sharedWith } : p));
       return sharedWith;
     } catch (err: any) {
-      // console.error("Failed to share password:", err); // Removed to prevent Next.js overlay for this handled error
-      setError(err.message || 'An unknown error occurred while sharing password.');
-      throw err; // Error is still re-thrown to be caught by the dialog
+      // setError(err.message || 'An unknown error occurred while sharing password.'); // Error handled by SharePasswordDialog
+      throw err; 
     } finally {
       setIsLoading(false);
     }
@@ -324,11 +315,11 @@ export function usePasswordManager(currentUserId?: string | null) {
   const updateSharePermission = useCallback(async (passwordId: string, sharedUserId: string, permission: 'read' | 'full'): Promise<SharedUser[] | undefined> => {
     if (!currentUserId) {
       const err = new Error('User not authenticated to update share permission');
-      setError(err.message);
+      // setError(err.message); // Error handled by SharePasswordDialog
       throw err;
     }
     setIsLoading(true);
-    setError(null);
+    // setError(null); // Clear global error for this operation
     try {
       const response = await fetch(`${API_BASE_URL}/${passwordId}/share/${sharedUserId}`, {
         method: 'PUT',
@@ -346,8 +337,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       setPasswords(prev => prev.map(p => p.id === passwordId ? { ...p, sharedWith: sharedWith } : p));
       return sharedWith;
     } catch (err: any) {
-      // console.error("Failed to update share permission:", err);
-      setError(err.message || 'An unknown error occurred while updating share permission.');
+      // setError(err.message || 'An unknown error occurred while updating share permission.'); // Error handled by SharePasswordDialog
       throw err;
     } finally {
       setIsLoading(false);
@@ -357,11 +347,11 @@ export function usePasswordManager(currentUserId?: string | null) {
   const removeShare = useCallback(async (passwordId: string, sharedUserId: string): Promise<SharedUser[] | undefined> => {
     if (!currentUserId) {
       const err = new Error('User not authenticated to remove share');
-      setError(err.message);
+      // setError(err.message); // Error handled by SharePasswordDialog
       throw err;
     }
     setIsLoading(true);
-    setError(null);
+    // setError(null); // Clear global error for this operation
     try {
       const response = await fetch(`${API_BASE_URL}/${passwordId}/share/${sharedUserId}`, {
         method: 'DELETE',
@@ -377,8 +367,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       setPasswords(prev => prev.map(p => p.id === passwordId ? { ...p, sharedWith: sharedWith } : p));
       return sharedWith;
     } catch (err: any) {
-      // console.error("Failed to remove share:", err);
-      setError(err.message || 'An unknown error occurred while removing share.');
+      // setError(err.message || 'An unknown error occurred while removing share.'); // Error handled by SharePasswordDialog
       throw err;
     } finally {
       setIsLoading(false);
@@ -389,7 +378,7 @@ export function usePasswordManager(currentUserId?: string | null) {
   return {
     passwords,
     isLoading,
-    error,
+    error, // This error state will now primarily reflect issues like initial data load failure
     fetchPasswords,
     addPassword,
     updatePassword,
@@ -398,9 +387,10 @@ export function usePasswordManager(currentUserId?: string | null) {
     generatePassword,
     clearAllPasswords,
     exportPasswordsToCSV,
-    // Funções de compartilhamento
     sharePassword,
     updateSharePermission,
     removeShare,
   };
 }
+
+    
