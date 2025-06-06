@@ -74,7 +74,7 @@ export function SharePasswordDialog({
       toast({ title: "Ação Não Permitida", description: "Você não pode compartilhar uma senha consigo mesmo.", variant: "destructive" });
       return;
     }
-    // Client-side check if already shared
+    
     if (passwordEntry.sharedWith?.some(s => s.userId === userIdToShareWith.trim())) {
       toast({ title: "Já Compartilhado", description: "Esta senha já está compartilhada com este usuário. Edite a permissão existente se necessário.", variant: "default" });
       return;
@@ -85,7 +85,7 @@ export function SharePasswordDialog({
       await onSharePassword(passwordEntry.id, userIdToShareWith.trim(), permission);
       toast({ title: "Sucesso!", description: `Senha compartilhada com o usuário.` });
       setUserIdToShareWith(''); 
-      setPermission('read'); // Reset permission for next share
+      setPermission('read');
     } catch (error: any) {
       toast({ title: "Erro ao Compartilhar", description: error.message || "Não foi possível adicionar o compartilhamento.", variant: "destructive" });
     } finally {
@@ -252,5 +252,4 @@ export function SharePasswordDialog({
     </Dialog>
   );
 }
-
     
