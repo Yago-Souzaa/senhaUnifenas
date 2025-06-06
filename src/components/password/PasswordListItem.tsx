@@ -22,6 +22,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -33,7 +34,7 @@ interface PasswordListItemProps {
   entry: PasswordEntry;
   onEdit: (entry: PasswordEntry) => void;
   onDelete: (id: string) => void;
-  onOpenShareDialog: (entry: PasswordEntry) => void; // Nova prop
+  onOpenShareDialog: (entry: PasswordEntry) => void;
   activeTab: string;
   currentUserId: string | undefined | null;
 }
@@ -133,19 +134,21 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                <DropdownMenuSeparator />
                 {canEdit && (
                   <DropdownMenuItem onClick={() => onEdit(entry)} className="cursor-pointer">
                     <Edit2 size={16} className="mr-2" />
                     Editar
                   </DropdownMenuItem>
                 )}
-                {isOwner && ( // Somente o proprietário pode iniciar o compartilhamento
+                {isOwner && ( 
                   <DropdownMenuItem onClick={() => onOpenShareDialog(entry)} className="cursor-pointer">
                     <Share2 size={16} className="mr-2" />
                     Compartilhar
                   </DropdownMenuItem>
                 )}
-                {(canEdit || isOwner) && <DropdownMenuSeparator />} 
+                {(canEdit || isOwner) && entry.sharedWith && entry.sharedWith.length > 0 && <DropdownMenuSeparator />}
                 {canDelete && (
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem
