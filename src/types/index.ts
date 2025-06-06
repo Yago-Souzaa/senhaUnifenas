@@ -1,25 +1,27 @@
 
 import type { User as FirebaseUserType } from 'firebase/auth';
 
+// SharedUser is now effectively deprecated for new shares but kept for legacy data.
+// New shares will only be via groups.
 export interface SharedUser {
-  userId: string; // UID of the user it's shared with
-  permission: 'read' | 'full'; // 'read' for view-only, 'full' for edit/delete
+  userId: string; 
+  permission: 'read' | 'full'; 
   sharedAt?: Date;
-  sharedBy?: string; // UID of the user who initiated this specific share instance
-  userEmail?: string; // Optional: For easier display in UI, not primary data.
+  sharedBy?: string; 
+  userEmail?: string; 
 }
 
 export interface GroupMember {
-  userId: string; // Firebase UID of the member
-  role: 'member' | 'admin'; // Role within the group
+  userId: string; 
+  role: 'member' | 'admin'; 
   addedAt?: Date;
-  addedBy?: string; // UID of user who added this member
+  addedBy?: string; 
 }
 
 export interface Group {
-  id: string; // MongoDB's _id as a string
+  id: string; 
   name: string;
-  ownerId: string; // Firebase UID of the group owner
+  ownerId: string; 
   members: GroupMember[];
   createdAt?: Date;
   updatedAt?: Date;
@@ -30,9 +32,9 @@ export interface HistoryEntry {
     | 'created' 
     | 'updated' 
     | 'deleted' 
-    | 'shared' 
-    | 'share_updated' 
-    | 'share_removed' 
+    | 'shared' // Legacy individual share
+    | 'share_updated' // Legacy individual share
+    | 'share_removed' // Legacy individual share
     | 'restored' 
     | 'cleared'
     | 'group_created'
@@ -42,7 +44,7 @@ export interface HistoryEntry {
     | 'group_member_role_updated'
     | 'password_shared_with_group'
     | 'password_unshared_from_group';
-  userId: string; // UID of the user who performed the action
+  userId: string; 
   timestamp: Date;
   details?: any; 
 }
@@ -62,8 +64,8 @@ export interface PasswordEntry {
   createdBy?: { userId: string; timestamp: Date };
   lastModifiedBy?: { userId: string; timestamp: Date };
 
-  sharedWith?: SharedUser[];
-  sharedWithGroupIds?: string[]; // Array of Group IDs this password is shared with
+  sharedWith?: SharedUser[]; // Deprecated for new shares, use sharedWithGroupIds
+  sharedWithGroupIds?: string[]; 
 
   history?: HistoryEntry[];
   
@@ -73,4 +75,3 @@ export interface PasswordEntry {
 }
 
 export type FirebaseUser = FirebaseUserType;
-

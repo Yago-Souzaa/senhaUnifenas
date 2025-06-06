@@ -2,7 +2,7 @@
 'use client';
 
 import { useState } from 'react';
-import type { PasswordEntry } from '@/types';
+import type { PasswordEntry, Group } from '@/types'; // Added Group for context if needed
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -29,7 +29,6 @@ import {
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
-
 interface PasswordListItemProps {
   entry: PasswordEntry;
   onEdit: (entry: PasswordEntry) => void;
@@ -37,9 +36,10 @@ interface PasswordListItemProps {
   onOpenShareDialog: (entry: PasswordEntry) => void;
   activeTab: string;
   currentUserId: string | undefined | null;
+  userGroups?: Group[]; // Pass user's groups to determine admin status for shared passwords
 }
 
-export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, activeTab, currentUserId }: PasswordListItemProps) {
+export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, activeTab, currentUserId, userGroups = [] }: PasswordListItemProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const { toast } = useToast();
@@ -66,15 +66,31 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
   const effectiveOwnerId = entry.ownerId || entry.userId;
   const isOwner = !!currentUserId && effectiveOwnerId === currentUserId;
 
-  // Determine edit/delete rights considering direct shares and group shares (assuming group admins can edit/delete if password shared with group)
-  // For simplicity, group share currently doesn't grant edit/delete on password, only owner or direct 'full' share does.
-  // This logic would need to be enhanced if group admins should manage passwords shared with their group.
-  const canEdit = isOwner || (!!currentUserId && entry.sharedWith?.some(s => s.userId === currentUserId && s.permission === 'full'));
-  const canDelete = isOwner || (!!currentUserId && entry.sharedWith?.some(s => s.userId === currentUserId && s.permission === 'full'));
+  // New permission logic:
+  // User can edit/delete if:
+  // 1. They are the owner of the password.
+  // 2. OR, the password is shared with a group, AND the user is an admin of THAT group.
+  let canManagePassword = isOwner;
+  if (!canManagePassword && entry.sharedWithGroupIds && entry.sharedWithGroupIds.length > 0 && currentUserId) {
+    for (const groupId of entry.sharedWithGroupIds) {
+      const groupUserIsMemberOf = userGroups.find(g => g.id === groupId);
+      if (groupUserIsMemberOf && groupUserIsMemberOf.members.some(m => m.userId === currentUserId && m.role === 'admin')) {
+        canManagePassword = true;
+        break;
+      }
+    }
+  }
 
-  const isSharedDirectly = entry.sharedWith && entry.sharedWith.length > 0;
+  const canEdit = canManagePassword;
+  const canDelete = canManagePassword;
+
+  // Individual sharing is deprecated, so these checks are removed/simplified
+  // const isSharedDirectly = entry.sharedWith && entry.sharedWith.length > 0; 
   const isSharedWithGroups = entry.sharedWithGroupIds && entry.sharedWithGroupIds.length > 0;
 
+  // User can open share dialog if they own the password OR are an admin of any group.
+  // (Actual sharing to a specific group will be further permission-checked in the dialog/API)
+  const canOpenShareDialog = isOwner || userGroups.some(g => g.members.some(m => m.userId === currentUserId && m.role === 'admin'));
 
   return (
     <Card className="mb-3 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-md">
@@ -125,11 +141,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
                 </Button>
               </div>
             )}
-            {isSharedDirectly && (
-                 <Badge variant={isOwner ? "outline" : "default"} className="text-xs py-0.5 px-1.5 cursor-default" title={`Compartilhado com ${entry.sharedWith?.length} usuário(s)`}>
-                    <Users size={12} className="mr-1"/> {entry.sharedWith?.length} {entry.sharedWith?.length === 1 ? "Usuário" : "Usuários"}
-                </Badge>
-            )}
+            {/* Removed individual share badge */}
             {isSharedWithGroups && (
                  <Badge variant={isOwner ? "outline" : "default"} className="text-xs py-0.5 px-1.5 cursor-default bg-teal-600 text-white hover:bg-teal-700" title={`Compartilhado com ${entry.sharedWithGroupIds?.length} grupo(s)`}>
                     <ShieldCheck size={12} className="mr-1"/> {entry.sharedWithGroupIds?.length} {entry.sharedWithGroupIds?.length === 1 ? "Grupo" : "Grupos"}
@@ -157,23 +169,21 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
                     Editar Detalhes
                   </DropdownMenuItem>
                 )}
-                {/* Share dialog is always available for owners, or if they have full permission to then manage shares of that entry.
-                    For now, only owner can initiate any kind of share (direct or group).
-                */}
-                {isOwner && (
+                
+                {canOpenShareDialog && (
                   <DropdownMenuItem onClick={() => onOpenShareDialog(entry)} className="cursor-pointer">
                     <Share2 size={16} className="mr-2" />
-                    Compartilhar / Gerenciar
+                    Compartilhar com Grupos
                   </DropdownMenuItem>
                 )}
                 
-                {(canEdit || isOwner) && canDelete && <DropdownMenuSeparator />}
+                {(canEdit || canOpenShareDialog) && canDelete && <DropdownMenuSeparator />}
 
                 {canDelete && (
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
-                      onSelect={(e) => e.preventDefault()} // Prevent closing menu before dialog opens
+                      onSelect={(e) => e.preventDefault()} 
                     >
                       <Trash2 size={16} className="mr-2" />
                       Deletar Senha
@@ -181,8 +191,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
                   </AlertDialogTrigger>
                 )}
 
-                {/* If no action is available for this user for this password */}
-                {!canEdit && !isOwner && !canDelete && (
+                {!canEdit && !canOpenShareDialog && !canDelete && (
                    <DropdownMenuItem disabled className="text-muted-foreground px-2 py-1.5">
                     Apenas Leitura
                   </DropdownMenuItem>

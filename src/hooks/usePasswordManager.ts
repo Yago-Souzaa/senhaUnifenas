@@ -7,7 +7,6 @@ import type { PasswordEntry, SharedUser, Group, GroupMember } from '@/types';
 const API_BASE_URL = '/api/passwords';
 const GROUPS_API_BASE_URL = '/api/groups';
 
-
 async function parseErrorResponse(response: Response, defaultMessage: string): Promise<string> {
   try {
     const errorData = await response.json();
@@ -16,7 +15,7 @@ async function parseErrorResponse(response: Response, defaultMessage: string): P
     try {
         const textError = await response.text();
         if (textError) return textError;
-    } catch (e) {
+    } catch (parseTextError) {
         // Ignore error parsing text
     }
     return defaultMessage;
@@ -27,7 +26,7 @@ export function usePasswordManager(currentUserId?: string | null) {
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null); // For global errors like initial load
+  const [error, setError] = useState<string | null>(null);
 
   const fetchPasswords = useCallback(async () => {
     if (!currentUserId) {
@@ -39,9 +38,7 @@ export function usePasswordManager(currentUserId?: string | null) {
     setError(null);
     try {
       const response = await fetch(API_BASE_URL, {
-        headers: {
-          'X-User-ID': currentUserId,
-        }
+        headers: { 'X-User-ID': currentUserId }
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, `Failed to fetch passwords: ${response.statusText}`);
@@ -61,16 +58,12 @@ export function usePasswordManager(currentUserId?: string | null) {
   const fetchGroups = useCallback(async () => {
     if (!currentUserId) {
       setGroups([]);
-      // Not setting isLoading here as it might be called independently
       return;
     }
-    // setIsLoading(true); // Could be a separate loading state for groups
-    setError(null);
+    // Not setting global isLoading/error here to keep it specific to the caller if needed
     try {
       const response = await fetch(GROUPS_API_BASE_URL, {
-        headers: {
-          'X-User-ID': currentUserId,
-        }
+        headers: { 'X-User-ID': currentUserId }
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, `Failed to fetch groups: ${response.statusText}`);
@@ -79,24 +72,37 @@ export function usePasswordManager(currentUserId?: string | null) {
       const data: Group[] = await response.json();
       setGroups(data);
     } catch (err: any) {
-      console.error("Failed to load groups:", err);
-      // setError(err.message || 'An unknown error occurred while fetching groups.'); // Avoid overwriting password load error
+      // Caller should handle this error for UI feedback
+      console.error("Failed to load groups in hook:", err);
       setGroups([]);
-      throw err; // Re-throw for UI to handle if needed
-    } finally {
-      // setIsLoading(false);
+      throw err; 
     }
   }, [currentUserId]);
 
-
   useEffect(() => {
-    fetchPasswords();
-    fetchGroups(); // Fetch groups along with passwords
-  }, [fetchPasswords, fetchGroups]);
+    if (currentUserId) {
+      setIsLoading(true);
+      Promise.all([
+        fetchPasswords(),
+        fetchGroups().catch(err => {
+          // Log group fetch error, but don't let it block password display
+          // Individual components calling fetchGroups should handle their own UI error state
+          console.warn("Initial group fetch failed in usePasswordManager useEffect:", err.message);
+        }) 
+      ]).finally(() => {
+        setIsLoading(false);
+      });
+    } else {
+      setPasswords([]);
+      setGroups([]);
+      setIsLoading(false);
+    }
+  }, [currentUserId, fetchPasswords, fetchGroups]);
+
 
   const addPassword = useCallback(async (entryData: Omit<PasswordEntry, 'id' | 'ownerId' | 'userId' | 'sharedWith' | 'sharedWithGroupIds' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt'>) => {
     if (!currentUserId) throw new Error('User not authenticated');
-    setIsLoading(true);
+    // setIsLoading(true); // Operation specific loading can be handled by caller
     try {
       const payload = { ...entryData }; 
       const response = await fetch(API_BASE_URL, {
@@ -117,13 +123,13 @@ export function usePasswordManager(currentUserId?: string | null) {
     } catch (err: any) {
       throw err;
     } finally {
-      setIsLoading(false);
+      // setIsLoading(false);
     }
   }, [currentUserId]);
 
   const updatePassword = useCallback(async (updatedEntry: Omit<PasswordEntry, 'ownerId' | 'userId' | 'sharedWith' | 'sharedWithGroupIds' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt'> & {id: string}) => {
     if (!currentUserId) throw new Error('User not authenticated');
-    setIsLoading(true);
+    // setIsLoading(true);
     try {
       const payload = { ...updatedEntry }; 
       const response = await fetch(`${API_BASE_URL}/${updatedEntry.id}`, {
@@ -144,37 +150,33 @@ export function usePasswordManager(currentUserId?: string | null) {
     } catch (err: any) {
       throw err;
     } finally {
-      setIsLoading(false);
+      // setIsLoading(false);
     }
   }, [currentUserId]);
 
   const deletePassword = useCallback(async (id: string) => {
     if (!currentUserId) throw new Error('User not authenticated');
-    setIsLoading(true);
+    // setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/${id}`, {
         method: 'DELETE',
-        headers: {
-          'X-User-ID': currentUserId,
-        }
+        headers: { 'X-User-ID': currentUserId }
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, `Failed to delete password: ${response.statusText}`);
         throw new Error(errorMessage);
       }
-      // API handles soft delete, client refetches or filters based on isDeleted
-      setPasswords(prev => prev.filter(p => p.id !== id)); // Optimistic update, or refetch
-      // await fetchPasswords(); // Or refetch
+      setPasswords(prev => prev.filter(p => p.id !== id));
     } catch (err: any) {
       throw err;
     } finally {
-      setIsLoading(false);
+      // setIsLoading(false);
     }
   }, [currentUserId]);
 
   const importPasswords = useCallback(async (file: File): Promise<{ importedCount: number, message?: string }> => {
     if (!currentUserId) throw new Error('User not authenticated');
-    setIsLoading(true);
+    // setIsLoading(true);
     try {
       const formData = new FormData();
       formData.append('file', file);
@@ -183,9 +185,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       const response = await fetch(`${API_BASE_URL}/import`, {
         method: 'POST',
         body: formData,
-        headers: {
-           'X-User-ID': currentUserId,
-        }
+        headers: { 'X-User-ID': currentUserId }
       });
 
       const result = await response.json();
@@ -197,18 +197,16 @@ export function usePasswordManager(currentUserId?: string | null) {
     } catch (err: any) {
       throw err;
     } finally {
-      setIsLoading(false);
+      // setIsLoading(false);
     }
   }, [fetchPasswords, currentUserId]);
   
   const exportPasswordsToCSV = useCallback(async (): Promise<boolean> => {
     if (!currentUserId) throw new Error('User not authenticated for export.');
-    setIsLoading(true);
+    // setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/export`, {
-        headers: {
-          'X-User-ID': currentUserId,
-        }
+        headers: { 'X-User-ID': currentUserId }
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, `Failed to export passwords: ${response.statusText}`);
@@ -227,7 +225,7 @@ export function usePasswordManager(currentUserId?: string | null) {
     } catch (err: any) {
       throw err;
     } finally {
-      setIsLoading(false);
+      // setIsLoading(false);
     }
   }, [currentUserId]);
 
@@ -251,13 +249,11 @@ export function usePasswordManager(currentUserId?: string | null) {
 
   const clearAllPasswords = useCallback(async () => {
     if (!currentUserId) throw new Error('User not authenticated');
-    setIsLoading(true);
+    // setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/clear`, {
         method: 'POST',
-        headers: {
-          'X-User-ID': currentUserId,
-        }
+        headers: { 'X-User-ID': currentUserId }
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, `Failed to clear passwords: ${response.statusText}`);
@@ -267,90 +263,14 @@ export function usePasswordManager(currentUserId?: string | null) {
     } catch (err: any) {
       throw err;
     } finally {
-      setIsLoading(false);
-    }
-  }, [currentUserId]);
-
-  const sharePassword = useCallback(async (passwordId: string, userIdToShareWith: string, permission: 'read' | 'full'): Promise<SharedUser[] | undefined> => {
-    if (!currentUserId) throw new Error('User not authenticated to share password');
-    setIsLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/${passwordId}/share`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-ID': currentUserId,
-        },
-        body: JSON.stringify({ userIdToShareWith, permission }),
-      });
-      if (!response.ok) {
-        const errorMessage = await parseErrorResponse(response, 'Failed to share password');
-        throw new Error(errorMessage);
-      }
-      const { sharedWith } = await response.json() as { sharedWith: SharedUser[] };
-      setPasswords(prev => prev.map(p => p.id === passwordId ? { ...p, sharedWith: sharedWith } : p));
-      return sharedWith;
-    } catch (err: any) {
-      throw err; 
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentUserId]);
-
-  const updateSharePermission = useCallback(async (passwordId: string, sharedUserId: string, permission: 'read' | 'full'): Promise<SharedUser[] | undefined> => {
-    if (!currentUserId) throw new Error('User not authenticated to update share permission');
-    setIsLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/${passwordId}/share/${sharedUserId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-ID': currentUserId,
-        },
-        body: JSON.stringify({ permission }),
-      });
-      if (!response.ok) {
-        const errorMessage = await parseErrorResponse(response, 'Failed to update share permission');
-        throw new Error(errorMessage);
-      }
-      const { sharedWith } = await response.json() as { sharedWith: SharedUser[] };
-      setPasswords(prev => prev.map(p => p.id === passwordId ? { ...p, sharedWith: sharedWith } : p));
-      return sharedWith;
-    } catch (err: any) {
-      throw err;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentUserId]);
-
-  const removeShare = useCallback(async (passwordId: string, sharedUserId: string): Promise<SharedUser[] | undefined> => {
-    if (!currentUserId) throw new Error('User not authenticated to remove share');
-    setIsLoading(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/${passwordId}/share/${sharedUserId}`, {
-        method: 'DELETE',
-        headers: {
-          'X-User-ID': currentUserId,
-        },
-      });
-      if (!response.ok) {
-        const errorMessage = await parseErrorResponse(response, 'Failed to remove share');
-        throw new Error(errorMessage);
-      }
-      const { sharedWith } = await response.json() as { sharedWith: SharedUser[] };
-      setPasswords(prev => prev.map(p => p.id === passwordId ? { ...p, sharedWith: sharedWith } : p));
-      return sharedWith;
-    } catch (err: any) {
-      throw err;
-    } finally {
-      setIsLoading(false);
+      // setIsLoading(false);
     }
   }, [currentUserId]);
 
   // Group Management Functions
   const createGroup = useCallback(async (name: string): Promise<Group> => {
     if (!currentUserId) throw new Error('User not authenticated');
-    setIsLoading(true);
+    // setIsLoading(true);
     try {
       const response = await fetch(GROUPS_API_BASE_URL, {
         method: 'POST',
@@ -362,15 +282,17 @@ export function usePasswordManager(currentUserId?: string | null) {
         throw new Error(errorMessage);
       }
       const newGroup: Group = await response.json();
-      setGroups(prev => [...prev, newGroup]);
+      setGroups(prev => [...prev, newGroup].sort((a,b) => a.name.localeCompare(b.name))); // Keep sorted
       return newGroup;
     } catch (err) { throw err; } 
-    finally { setIsLoading(false); }
+    finally { 
+      // setIsLoading(false); 
+    }
   }, [currentUserId]);
 
   const addGroupMember = useCallback(async (groupId: string, userIdToAdd: string, role: 'member' | 'admin'): Promise<GroupMember[]> => {
     if (!currentUserId) throw new Error('User not authenticated');
-    setIsLoading(true);
+    // setIsLoading(true);
     try {
       const response = await fetch(`${GROUPS_API_BASE_URL}/${groupId}/members`, {
         method: 'POST',
@@ -382,15 +304,17 @@ export function usePasswordManager(currentUserId?: string | null) {
         throw new Error(errorMessage);
       }
       const { members } = await response.json() as { members: GroupMember[] };
-      setGroups(prev => prev.map(g => g.id === groupId ? { ...g, members } : g));
+      setGroups(prev => prev.map(g => g.id === groupId ? { ...g, members: members.sort((a,b) => a.userId.localeCompare(b.userId)) } : g));
       return members;
     } catch (err) { throw err; }
-    finally { setIsLoading(false); }
+    finally { 
+      // setIsLoading(false); 
+    }
   }, [currentUserId]);
 
   const removeGroupMember = useCallback(async (groupId: string, memberUidToRemove: string): Promise<GroupMember[]> => {
     if (!currentUserId) throw new Error('User not authenticated');
-    setIsLoading(true);
+    // setIsLoading(true);
     try {
       const response = await fetch(`${GROUPS_API_BASE_URL}/${groupId}/members/${memberUidToRemove}`, {
         method: 'DELETE',
@@ -401,15 +325,17 @@ export function usePasswordManager(currentUserId?: string | null) {
         throw new Error(errorMessage);
       }
       const { members } = await response.json() as { members: GroupMember[] };
-      setGroups(prev => prev.map(g => g.id === groupId ? { ...g, members } : g));
+      setGroups(prev => prev.map(g => g.id === groupId ? { ...g, members: members.sort((a,b) => a.userId.localeCompare(b.userId)) } : g));
       return members;
     } catch (err) { throw err; }
-    finally { setIsLoading(false); }
+    finally { 
+      // setIsLoading(false); 
+    }
   }, [currentUserId]);
   
   const updateGroupMemberRole = useCallback(async (groupId: string, memberUid: string, role: 'member' | 'admin'): Promise<GroupMember[]> => {
     if (!currentUserId) throw new Error('User not authenticated');
-    setIsLoading(true);
+    // setIsLoading(true);
     try {
       const response = await fetch(`${GROUPS_API_BASE_URL}/${groupId}/members/${memberUid}`, {
         method: 'PUT',
@@ -421,16 +347,17 @@ export function usePasswordManager(currentUserId?: string | null) {
         throw new Error(errorMessage);
       }
       const { members } = await response.json() as { members: GroupMember[] };
-      setGroups(prev => prev.map(g => g.id === groupId ? { ...g, members } : g));
+      setGroups(prev => prev.map(g => g.id === groupId ? { ...g, members: members.sort((a,b) => a.userId.localeCompare(b.userId)) } : g));
       return members;
     } catch (err) { throw err; }
-    finally { setIsLoading(false); }
+    finally { 
+      // setIsLoading(false); 
+    }
   }, [currentUserId]);
-
 
   const deleteGroup = useCallback(async (groupId: string): Promise<void> => {
     if (!currentUserId) throw new Error('User not authenticated');
-    setIsLoading(true);
+    // setIsLoading(true);
     try {
       const response = await fetch(`${GROUPS_API_BASE_URL}/${groupId}`, {
         method: 'DELETE',
@@ -441,14 +368,16 @@ export function usePasswordManager(currentUserId?: string | null) {
         throw new Error(errorMessage);
       }
       setGroups(prev => prev.filter(g => g.id !== groupId));
-      await fetchPasswords(); // Passwords might have been unshared from this group
+      await fetchPasswords(); 
     } catch (err) { throw err; }
-    finally { setIsLoading(false); }
+    finally { 
+      // setIsLoading(false); 
+    }
   }, [currentUserId, fetchPasswords]);
   
   const updateGroup = useCallback(async (groupId: string, name: string): Promise<Group> => {
     if (!currentUserId) throw new Error('User not authenticated');
-    setIsLoading(true);
+    // setIsLoading(true);
     try {
       const response = await fetch(`${GROUPS_API_BASE_URL}/${groupId}`, {
         method: 'PUT',
@@ -460,17 +389,18 @@ export function usePasswordManager(currentUserId?: string | null) {
         throw new Error(errorMessage);
       }
       const updatedGroup: Group = await response.json();
-      setGroups(prev => prev.map(g => g.id === groupId ? updatedGroup : g));
+      setGroups(prev => prev.map(g => g.id === groupId ? updatedGroup : g).sort((a,b) => a.name.localeCompare(b.name)));
       return updatedGroup;
     } catch (err) { throw err; }
-    finally { setIsLoading(false); }
+    finally { 
+      // setIsLoading(false); 
+    }
   }, [currentUserId]);
-
 
   // Password-Group Sharing Functions
   const sharePasswordWithGroup = useCallback(async (passwordId: string, groupId: string): Promise<string[] | undefined> => {
     if (!currentUserId) throw new Error('User not authenticated');
-    setIsLoading(true);
+    // setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/${passwordId}/shareWithGroup/${groupId}`, {
         method: 'POST',
@@ -484,12 +414,14 @@ export function usePasswordManager(currentUserId?: string | null) {
       setPasswords(prev => prev.map(p => p.id === passwordId ? { ...p, sharedWithGroupIds } : p));
       return sharedWithGroupIds;
     } catch (err) { throw err; }
-    finally { setIsLoading(false); }
+    finally { 
+      // setIsLoading(false); 
+    }
   }, [currentUserId]);
 
   const unsharePasswordFromGroup = useCallback(async (passwordId: string, groupId: string): Promise<string[] | undefined> => {
     if (!currentUserId) throw new Error('User not authenticated');
-    setIsLoading(true);
+    // setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/${passwordId}/shareWithGroup/${groupId}`, {
         method: 'DELETE',
@@ -503,7 +435,9 @@ export function usePasswordManager(currentUserId?: string | null) {
       setPasswords(prev => prev.map(p => p.id === passwordId ? { ...p, sharedWithGroupIds } : p));
       return sharedWithGroupIds;
     } catch (err) { throw err; }
-    finally { setIsLoading(false); }
+    finally { 
+      // setIsLoading(false); 
+    }
   }, [currentUserId]);
 
 
@@ -520,10 +454,10 @@ export function usePasswordManager(currentUserId?: string | null) {
     generatePassword,
     clearAllPasswords,
     exportPasswordsToCSV,
-    sharePassword,
-    updateSharePermission,
-    removeShare,
-    // Group functions
+    // Removed individual share functions
+    // sharePassword,
+    // updateSharePermission,
+    // removeShare,
     fetchGroups,
     createGroup,
     updateGroup,

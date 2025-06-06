@@ -68,8 +68,8 @@ export default function HomePage() {
 
   const {
     passwords,
-    groups, // Get groups from the hook
-    isLoading: passwordsLoading, // This might need a more granular loading state if groups load separately
+    groups, 
+    isLoading: passwordsLoading,
     error: passwordManagerError,
     addPassword,
     updatePassword,
@@ -78,10 +78,10 @@ export default function HomePage() {
     generatePassword,
     clearAllPasswords,
     exportPasswordsToCSV,
-    sharePassword,
-    updateSharePermission,
-    removeShare,
-    fetchGroups, // To manually refresh groups if needed, though it fetches on load
+    // sharePassword, // Removed
+    // updateSharePermission, // Removed
+    // removeShare, // Removed
+    fetchGroups, 
     sharePasswordWithGroup,
     unsharePasswordFromGroup,
   } = usePasswordManager(firebaseUser?.uid);
@@ -122,7 +122,6 @@ export default function HomePage() {
           setUserCategories([]);
         }
         setActiveTab('Todas');
-        // Groups are fetched by the hook on user change
       } else {
         setUserCategories([]);
         setActiveTab('Todas');
@@ -153,7 +152,7 @@ export default function HomePage() {
       const updatedVersionInList = passwords.find(p => p.id === passwordToShare.id);
       if (updatedVersionInList && JSON.stringify(updatedVersionInList) !== JSON.stringify(passwordToShare)) {
         setPasswordToShare(updatedVersionInList);
-      } else if (!updatedVersionInList && isShareDialogOpen) { // only if dialog is open and password disappears
+      } else if (!updatedVersionInList && isShareDialogOpen) { 
         setPasswordToShare(null);
         setIsShareDialogOpen(false);
         toast({ title: "Senha não encontrada", description: "A senha que você estava gerenciando não foi encontrada. Pode ter sido excluída.", variant: "destructive" });
@@ -607,6 +606,7 @@ export default function HomePage() {
                      searchTerm={searchTerm}
                      activeTab={activeTab}
                      currentUserId={firebaseUser.uid}
+                     userGroups={groups} 
                   />
                </div>
             </div>
@@ -639,16 +639,17 @@ export default function HomePage() {
         onOpenChange={setIsClearAllDialogOpen}
         onConfirm={handleClearAllPasswords}
       />
-      {isShareDialogOpen && passwordToShare && firebaseUser && ( // Ensure all props are ready
+      {isShareDialogOpen && passwordToShare && firebaseUser && (
         <SharePasswordDialog
             isOpen={isShareDialogOpen}
-            onOpenChange={setIsShareDialogOpen}
+            onOpenChange={(open) => {
+                setIsShareDialogOpen(open);
+                if (!open) setPasswordToShare(null);
+            }}
             passwordEntry={passwordToShare}
             currentUserId={firebaseUser.uid}
-            userGroups={groups} // Pass available groups
-            onSharePassword={sharePassword}
-            onUpdateShare={updateSharePermission}
-            onRemoveShare={removeShare}
+            userGroups={groups}
+            // onSharePassword, onUpdateShare, onRemoveShare removed
             onShareWithGroup={sharePasswordWithGroup}
             onUnshareFromGroup={unsharePasswordFromGroup}
         />
