@@ -60,6 +60,9 @@ const GoogleIcon = () => (
   </svg>
 );
 
+// !!! IMPORTANTE: Altere '@seudominio.com' para o domínio que você quer permitir !!!
+const ALLOWED_GOOGLE_DOMAIN = '@seudominio.com';
+
 
 export default function HomePage() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -222,7 +225,15 @@ export default function HomePage() {
   const handleLoginWithGoogle = async () => {
     setAuthError(null);
     try {
-      await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(auth, googleProvider);
+      // Verificação de domínio
+      if (result.user.email && !result.user.email.endsWith(ALLOWED_GOOGLE_DOMAIN)) {
+        await signOut(auth); // Desloga o usuário imediatamente
+        const errorMessage = `Acesso permitido apenas para usuários do domínio ${ALLOWED_GOOGLE_DOMAIN}.`;
+        setAuthError(errorMessage);
+        toast({ title: "Acesso Restrito", description: errorMessage, variant: "destructive" });
+        return;
+      }
       toast({ title: "Login com Google bem-sucedido!", description: "Bem-vindo!" });
     } catch (error) {
       handleFirebaseError(error as AuthError);
@@ -478,7 +489,7 @@ export default function HomePage() {
                       {authError && <p className="text-sm text-destructive">{authError}</p>}
                     </div>
                     <CardFooter className="px-0 pt-6 pb-0">
-                      <Button type="submit" className="w-full bg-primary hover:bg-primary/90">Entrar</Button>
+                      <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">Entrar</Button>
                     </CardFooter>
                   </form>
                   <div className="my-4 mx-6 flex items-center">
