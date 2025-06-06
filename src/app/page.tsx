@@ -12,11 +12,11 @@ import { PasswordGeneratorDialog } from '@/components/password/PasswordGenerator
 import { ClearAllPasswordsDialog } from '@/components/password/ClearAllPasswordsDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Label } from '@/components/ui/label'; // Keep for other dialogs if needed, check usage
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// Tabs components are no longer needed for auth section
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, XCircle, UserPlus, LogIn, KeyRound, EllipsisVertical, FolderKanban, Plus, X } from 'lucide-react';
+import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, XCircle, KeyRound, EllipsisVertical, FolderKanban, Plus, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -39,11 +39,11 @@ import {
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 
-import { auth, googleProvider } from '@/lib/firebase'; // Import googleProvider
+import { auth, googleProvider } from '@/lib/firebase';
 import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  signInWithPopup, // Import signInWithPopup
+  // createUserWithEmailAndPassword, // No longer needed
+  // signInWithEmailAndPassword, // No longer needed
+  signInWithPopup,
   signOut,
   onAuthStateChanged,
   type AuthError
@@ -67,8 +67,9 @@ export default function HomePage() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  // Email and password state no longer needed
+  // const [email, setEmail] = useState('');
+  // const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
   const {
@@ -106,8 +107,8 @@ export default function HomePage() {
       setFirebaseUser(user);
       setAuthLoading(false);
       if (user) {
-        setEmail('');
-        setPassword('');
+        // setEmail(''); // No longer needed
+        // setPassword(''); // No longer needed
         setAuthError(null);
         const storedCategories = localStorage.getItem(`userCategories_${user.uid}`);
         if (storedCategories) {
@@ -162,7 +163,7 @@ export default function HomePage() {
         errorMessage = "Senha incorreta.";
         break;
       case 'auth/invalid-credential':
-        errorMessage = "Email ou senha inválidos. Verifique os dados e tente novamente.";
+        errorMessage = "Credenciais inválidas. Verifique os dados e tente novamente."; // General for Google if specific error not caught
         break;
       case 'auth/email-already-in-use':
         errorMessage = "Este email já está em uso por outra conta.";
@@ -171,16 +172,16 @@ export default function HomePage() {
         errorMessage = "A senha é muito fraca. Use pelo menos 6 caracteres.";
         break;
       case 'auth/operation-not-allowed':
-         errorMessage = "Operação não permitida. Login por email/senha pode estar desabilitado.";
+         errorMessage = "Operação não permitida. Login por este método pode estar desabilitado.";
          break;
       case 'auth/too-many-requests':
-        errorMessage = "Muitas tentativas de login falharam. Tente novamente mais tarde.";
+        errorMessage = "Muitas tentativas falharam. Tente novamente mais tarde.";
         break;
       case 'auth/popup-closed-by-user':
         errorMessage = "O pop-up de login foi fechado antes da conclusão.";
         break;
       case 'auth/account-exists-with-different-credential':
-        errorMessage = "Já existe uma conta com este endereço de e-mail, mas com um método de login diferente. Tente fazer login com o método original.";
+        errorMessage = "Já existe uma conta com este endereço de e-mail, mas com um método de login diferente. Tente fazer login com o método original ou entre em contato com o suporte.";
         break;
       default:
         errorMessage = (error as Error).message || "Ocorreu um erro de autenticação desconhecido.";
@@ -189,37 +190,8 @@ export default function HomePage() {
     toast({ title: "Erro de Autenticação", description: errorMessage, variant: "destructive"});
   };
 
-  const handleRegisterWithEmail = async (e: FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-    if (!email || !password) {
-      setAuthError("Email e senha são obrigatórios.");
-      toast({ title: "Campos Vazios", description: "Email e senha são obrigatórios.", variant: "destructive" });
-      return;
-    }
-    try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      toast({ title: "Registro bem-sucedido!", description: "Você agora está logado." });
-    } catch (error) {
-      handleFirebaseError(error as AuthError);
-    }
-  };
-
-  const handleLoginWithEmail = async (e: FormEvent) => {
-    e.preventDefault();
-    setAuthError(null);
-    if (!email || !password) {
-      setAuthError("Email e senha são obrigatórios.");
-      toast({ title: "Campos Vazios", description: "Email e senha são obrigatórios.", variant: "destructive" });
-      return;
-    }
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      toast({ title: "Login bem-sucedido!", description: "Bem-vindo de volta!" });
-    } catch (error) {
-      handleFirebaseError(error as AuthError);
-    }
-  };
+  // handleRegisterWithEmail no longer needed
+  // handleLoginWithEmail no longer needed
 
   const handleLoginWithGoogle = async () => {
     setAuthError(null);
@@ -237,7 +209,6 @@ export default function HomePage() {
           return;
         }
       } else {
-        // Caso o email não seja retornado (raro, mas para segurança)
         await signOut(auth);
         const errorMessage = "Não foi possível verificar o domínio do email. Tente novamente.";
         setAuthError(errorMessage);
@@ -476,78 +447,19 @@ export default function HomePage() {
         {!firebaseUser ? (
           <div className="flex justify-center items-center flex-col mt-8 md:mt-16">
             <Card className="w-full max-w-md shadow-xl">
-              <Tabs defaultValue="login" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="login">Login</TabsTrigger>
-                  <TabsTrigger value="register">Registrar</TabsTrigger>
-                </TabsList>
-                <TabsContent value="login">
-                    <CardHeader>
-                      <CardTitle className="font-headline text-2xl text-primary flex items-center gap-2"><LogIn size={24}/>Entrar</CardTitle>
-                      <CardDescription>Entre com seu email e senha para gerenciar suas senhas.</CardDescription>
-                    </CardHeader>
-                  <form onSubmit={handleLoginWithEmail} className="px-6 pb-2">
-                    <div className="space-y-4">
-                      <div className="space-y-1">
-                        <Label htmlFor="login-email">Email</Label>
-                        <Input id="login-email" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="login-password">Senha</Label>
-                        <Input id="login-password" type="password" placeholder="Sua senha" value={password} onChange={(e) => setPassword(e.target.value)} required />
-                      </div>
-                      {authError && <p className="text-sm text-destructive">{authError}</p>}
-                    </div>
-                    <CardFooter className="px-0 pt-6 pb-0">
-                      <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">Entrar</Button>
-                    </CardFooter>
-                  </form>
-                  <div className="my-4 mx-6 flex items-center">
-                    <div className="flex-grow border-t border-muted-foreground/20"></div>
-                    <span className="mx-4 flex-shrink text-xs uppercase text-muted-foreground">Ou</span>
-                    <div className="flex-grow border-t border-muted-foreground/20"></div>
-                  </div>
-                  <div className="px-6 pb-6">
-                    <Button onClick={handleLoginWithGoogle} variant="outline" className="w-full">
-                      <GoogleIcon />
-                      Entrar com Google
-                    </Button>
-                  </div>
-                </TabsContent>
-                <TabsContent value="register">
-                    <CardHeader>
-                      <CardTitle className="font-headline text-2xl text-primary flex items-center gap-2"><UserPlus size={24}/>Criar Nova Conta</CardTitle>
-                      <CardDescription>Crie uma conta para começar a salvar suas senhas com segurança.</CardDescription>
-                    </CardHeader>
-                   <form onSubmit={handleRegisterWithEmail} className="px-6 pb-2">
-                    <div className="space-y-4">
-                      <div className="space-y-1">
-                        <Label htmlFor="register-email">Email</Label>
-                        <Input id="register-email" type="email" placeholder="seu@email.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                      </div>
-                      <div className="space-y-1">
-                        <Label htmlFor="register-password">Senha</Label>
-                        <Input id="register-password" type="password" placeholder="Crie uma senha forte" value={password} onChange={(e) => setPassword(e.target.value)} required />
-                      </div>
-                      {authError && <p className="text-sm text-destructive">{authError}</p>}
-                    </div>
-                    <CardFooter className="px-0 pt-6 pb-0">
-                      <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">Registrar</Button>
-                    </CardFooter>
-                  </form>
-                  <div className="my-4 mx-6 flex items-center">
-                    <div className="flex-grow border-t border-muted-foreground/20"></div>
-                    <span className="mx-4 flex-shrink text-xs uppercase text-muted-foreground">Ou</span>
-                    <div className="flex-grow border-t border-muted-foreground/20"></div>
-                  </div>
-                  <div className="px-6 pb-6">
-                     <Button onClick={handleLoginWithGoogle} variant="outline" className="w-full">
-                       <GoogleIcon />
-                       Criar conta com Google
-                     </Button>
-                  </div>
-                </TabsContent>
-              </Tabs>
+              <CardHeader className="text-center">
+                <CardTitle className="font-headline text-2xl text-primary flex items-center justify-center gap-2">
+                   <KeyRound size={24}/> Autenticação
+                </CardTitle>
+                <CardDescription>Use sua conta Google dos domínios permitidos para acessar.</CardDescription>
+              </CardHeader>
+              <CardContent className="px-6 pb-6 pt-2">
+                {authError && <p className="text-sm text-destructive text-center mb-4">{authError}</p>}
+                <Button onClick={handleLoginWithGoogle} variant="outline" className="w-full">
+                  <GoogleIcon />
+                  Entrar com Google
+                </Button>
+              </CardContent>
             </Card>
           </div>
         ) : (
@@ -626,119 +538,116 @@ export default function HomePage() {
             </div>
 
             <div className="mb-4">
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                <div className="flex items-center border-b">
-                    <TabsList className="flex-grow">
-                      <ScrollArea className="w-full whitespace-nowrap">
-                        <div className="flex space-x-1 pb-1">
-                          <TabsTrigger value="Todas" className="flex items-center gap-1">
-                            <FolderKanban size={14} /> Todas
-                          </TabsTrigger>
-                          {userCategories.map(category => {
-                            const isCategoryEmpty = !passwords.some(p => p.categoria?.toLowerCase() === category.toLowerCase());
-                            return (
-                              <TabsTrigger key={category} value={category} className="relative group pr-7 py-1.5">
-                                <FolderKanban size={14} className="mr-1.5" />
-                                {category}
-                                {isCategoryEmpty && (
-                                  <Button
-                                    asChild
+               {/* Using simple Buttons for category tabs as Tabs component was conflicting */}
+               <div className="flex items-center border-b">
+                  <ScrollArea className="w-full whitespace-nowrap">
+                     <div className="flex space-x-1 pb-1">
+                        <Button
+                           variant={activeTab === 'Todas' ? "secondary" : "ghost"}
+                           size="sm"
+                           onClick={() => setActiveTab('Todas')}
+                           className="flex items-center gap-1 h-8 px-3 rounded-md"
+                        >
+                           <FolderKanban size={14} /> Todas
+                        </Button>
+                        {userCategories.map(category => {
+                           const isCategoryEmpty = !passwords.some(p => p.categoria?.toLowerCase() === category.toLowerCase());
+                           return (
+                           <div key={category} className="relative group">
+                              <Button
+                                 variant={activeTab === category ? "secondary" : "ghost"}
+                                 size="sm"
+                                 onClick={() => setActiveTab(category)}
+                                 className="flex items-center gap-1.5 h-8 px-3 rounded-md pr-7" // Added pr-7 for spacing X button
+                              >
+                                 <FolderKanban size={14} />
+                                 {category}
+                              </Button>
+                              {isCategoryEmpty && (
+                                 <Button
+                                    asChild // Important for custom clickable div inside
                                     variant="ghost"
                                     size="icon"
-                                    className="absolute top-1/2 right-0.5 -translate-y-1/2 h-5 w-5 opacity-0 group-hover:opacity-100 hover:bg-destructive/20"
+                                    className="absolute top-1/2 right-0.5 -translate-y-1/2 h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-destructive/20"
                                     
-                                  >
+                                 >
                                     <div
-                                      role="button"
-                                      tabIndex={0}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        e.preventDefault();
-                                        setCategoryToDelete(category);
-                                        setIsDeleteCategoryDialogOpen(true);
-                                      }}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter' || e.key === ' ') {
+                                       role="button"
+                                       tabIndex={0} // Make it focusable
+                                       onClick={(e) => {
+                                       e.stopPropagation(); // Prevent tab activation
+                                       e.preventDefault();
+                                       setCategoryToDelete(category);
+                                       setIsDeleteCategoryDialogOpen(true);
+                                       }}
+                                       onKeyDown={(e) => { // For accessibility
+                                       if (e.key === 'Enter' || e.key === ' ') {
                                           e.stopPropagation();
                                           e.preventDefault();
                                           setCategoryToDelete(category);
                                           setIsDeleteCategoryDialogOpen(true);
-                                        }
-                                      }}
-                                      title={`Excluir categoria ${category}`}
+                                       }
+                                       }}
+                                       title={`Excluir categoria ${category}`}
                                     >
-                                      <X size={12} className="text-destructive/80 hover:text-destructive" />
+                                       <X size={12} className="text-destructive/80 hover:text-destructive" />
                                     </div>
-                                  </Button>
-                                )}
-                              </TabsTrigger>
-                            );
-                          })}
-                        </div>
-                        <ScrollBar orientation="horizontal" />
-                      </ScrollArea>
-                    </TabsList>
-                    <AlertDialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
-                      <AlertDialogTrigger asChild>
+                                 </Button>
+                              )}
+                           </div>
+                           );
+                        })}
+                     </div>
+                     <ScrollBar orientation="horizontal" />
+                  </ScrollArea>
+                  <AlertDialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
+                     <AlertDialogTrigger asChild>
                         <Button variant="ghost" size="icon" className="ml-2 shrink-0" onClick={() => setIsAddCategoryDialogOpen(true)}>
-                          <Plus size={20} />
-                          <span className="sr-only">Adicionar Nova Categoria</span>
+                           <Plus size={20} />
+                           <span className="sr-only">Adicionar Nova Categoria</span>
                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
+                     </AlertDialogTrigger>
+                     <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Adicionar Nova Categoria</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Digite o nome para a nova aba de categoria.
-                          </AlertDialogDescription>
+                           <AlertDialogTitle>Adicionar Nova Categoria</AlertDialogTitle>
+                           <AlertDialogDescription>
+                           Digite o nome para a nova aba de categoria.
+                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <Input
-                          placeholder="Nome da Categoria"
-                          value={newCategoryName}
-                          onChange={(e) => setNewCategoryName(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                e.preventDefault();
-                                if(handleAddCategory()){
-                                   setIsAddCategoryDialogOpen(false);
-                                }
-                            }
-                          }}
+                           placeholder="Nome da Categoria"
+                           value={newCategoryName}
+                           onChange={(e) => setNewCategoryName(e.target.value)}
+                           onKeyDown={(e) => {
+                           if (e.key === 'Enter') {
+                                 e.preventDefault();
+                                 if(handleAddCategory()){
+                                 setIsAddCategoryDialogOpen(false);
+                                 }
+                           }
+                           }}
                         />
                         <AlertDialogFooter>
-                          <AlertDialogCancel onClick={() => { setNewCategoryName(''); setIsAddCategoryDialogOpen(false); }}>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => {
-                             if(handleAddCategory()){
-                                setIsAddCategoryDialogOpen(false);
-                             }
-                          }}>Adicionar</AlertDialogAction>
+                           <AlertDialogCancel onClick={() => { setNewCategoryName(''); setIsAddCategoryDialogOpen(false); }}>Cancelar</AlertDialogCancel>
+                           <AlertDialogAction onClick={() => {
+                           if(handleAddCategory()){
+                                 setIsAddCategoryDialogOpen(false);
+                           }
+                           }}>Adicionar</AlertDialogAction>
                         </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                </div>
-                 <TabsContent key="content-todas" value="Todas" className="mt-4">
-                     <PasswordList
-                        passwords={filteredPasswords}
-                        isLoading={passwordsLoading}
-                        onEdit={handleEditPassword}
-                        onDelete={handleDeletePassword}
-                        searchTerm={searchTerm}
-                        activeTab={activeTab}
-                    />
-                </TabsContent>
-                 {userCategories.map(category => (
-                    <TabsContent key={`content-${category}`} value={category} className="mt-4">
-                         <PasswordList
-                            passwords={filteredPasswords}
-                            isLoading={passwordsLoading}
-                            onEdit={handleEditPassword}
-                            onDelete={handleDeletePassword}
-                            searchTerm={searchTerm}
-                            activeTab={activeTab}
-                        />
-                    </TabsContent>
-                ))}
-              </Tabs>
+                     </AlertDialogContent>
+                  </AlertDialog>
+               </div>
+               <div className="mt-4"> {/* This div wraps the PasswordList */}
+                  <PasswordList
+                     passwords={filteredPasswords}
+                     isLoading={passwordsLoading}
+                     onEdit={handleEditPassword}
+                     onDelete={handleDeletePassword}
+                     searchTerm={searchTerm}
+                     activeTab={activeTab}
+                  />
+               </div>
             </div>
           </>
         )}
@@ -793,3 +702,5 @@ export default function HomePage() {
     </div>
   );
 }
+
+    
