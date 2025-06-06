@@ -1,6 +1,6 @@
 
 import { MongoClient, Db, Collection, ObjectId } from 'mongodb';
-import type { PasswordEntry, Group } from '@/types'; // Added Group
+import type { PasswordEntry, Group, CategoryShare } from '@/types';
 
 const MONGODB_URI = process.env.MONGODB_URI;
 const MONGODB_DB_NAME = process.env.MONGODB_DB_NAME;
@@ -38,24 +38,52 @@ if (process.env.NODE_ENV === 'development') {
   cachedDb = global.mongodb.db;
 }
 
-export async function connectToDatabase(): Promise<{ 
-  client: MongoClient, 
-  db: Db, 
-  passwordsCollection: Collection<Omit<PasswordEntry, 'id'>>,
-  groupsCollection: Collection<Omit<Group, 'id'>> // Added groupsCollection
+export async function connectToDatabase(): Promise<{
+  client: MongoClient,
+  db: Db,
+  passwordsCollection: Collection<Omit<PasswordEntry, 'id' | 'sharedVia'>>, // sharedVia is client-only
+  groupsCollection: Collection<Omit<Group, 'id'>>,
+  categorySharesCollection: Collection<Omit<CategoryShare, 'id'>>
 }> {
   if (cachedClient && cachedDb) {
-    return { 
-      client: cachedClient, 
-      db: cachedDb, 
-      passwordsCollection: cachedDb.collection<Omit<PasswordEntry, 'id'>>('passwords'),
-      groupsCollection: cachedDb.collection<Omit<Group, 'id'>>('groups') // Initialize groupsCollection
+    return {
+      client: cachedClient,
+      db: cachedDb,
+      passwordsCollection: cachedDb.collection<Omit<PasswordEntry, 'id' | 'sharedVia'>>('passwords'),
+      groupsCollection: cachedDb.collection<Omit<Group, 'id'>>('groups'),
+      categorySharesCollection: cachedDb.collection<Omit<CategoryShare, 'id'>>('categoryShares')
     };
   }
 
   const client = new MongoClient(MONGODB_URI!);
   await client.connect();
   const db = client.db(MONGODB_DB_NAME);
+
+  // Create indexes if they don't exist
+  // Index for categoryShares to ensure uniqueness of owner-category-group combination
+  // and to optimize lookups.
+  try {
+    await db.collection('categoryShares').createIndex(
+        { ownerId: 1, categoryName: 1, groupId: 1 },
+        { unique: true }
+    );
+    // Index for fetching shares by group
+    await db.collection('categoryShares').createIndex({ groupId: 1 });
+    // Index for fetching shares by owner
+    await db.collection('categoryShares').createIndex({ ownerId: 1, categoryName: 1 });
+
+    // Index for passwords for faster lookups by owner and category (critical for shared categories)
+    await db.collection('passwords').createIndex({ ownerId: 1, category: 1 });
+    await db.collection('passwords').createIndex({ ownerId: 1 }); // For general user passwords
+
+    // Indexes for groups
+    await db.collection('groups').createIndex({ ownerId: 1 });
+    await db.collection('groups').createIndex({ "members.userId": 1 });
+
+  } catch (indexError) {
+    console.warn("MongoDB index creation warning/error (might be okay if indexes already exist):", indexError);
+  }
+
 
   if (process.env.NODE_ENV === 'development') {
     global.mongodb!.client = client;
@@ -64,12 +92,13 @@ export async function connectToDatabase(): Promise<{
     cachedClient = client;
     cachedDb = db;
   }
-  
-  return { 
-    client, 
-    db, 
-    passwordsCollection: db.collection<Omit<PasswordEntry, 'id'>>('passwords'),
-    groupsCollection: db.collection<Omit<Group, 'id'>>('groups') // Initialize groupsCollection
+
+  return {
+    client,
+    db,
+    passwordsCollection: db.collection<Omit<PasswordEntry, 'id' | 'sharedVia'>>('passwords'),
+    groupsCollection: db.collection<Omit<Group, 'id'>>('groups'),
+    categorySharesCollection: db.collection<Omit<CategoryShare, 'id'>>('categoryShares')
   };
 }
 

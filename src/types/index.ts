@@ -2,56 +2,66 @@
 import type { User as FirebaseUserType } from 'firebase/auth';
 
 // SharedUser is now effectively deprecated for new shares but kept for legacy data.
-// New shares will only be via groups.
 export interface SharedUser {
-  userId: string; 
-  permission: 'read' | 'full'; 
+  userId: string;
+  permission: 'read' | 'full';
   sharedAt?: Date;
-  sharedBy?: string; 
-  userEmail?: string; 
+  sharedBy?: string;
+  userEmail?: string;
 }
 
 export interface GroupMember {
-  userId: string; 
-  role: 'member' | 'admin'; 
+  userId: string;
+  role: 'member' | 'admin';
   addedAt?: Date;
-  addedBy?: string; 
+  addedBy?: string;
 }
 
 export interface Group {
-  id: string; 
+  id: string;
   name: string;
-  ownerId: string; 
+  ownerId: string;
   members: GroupMember[];
   createdAt?: Date;
   updatedAt?: Date;
 }
 
+export interface CategoryShare {
+  id: string;
+  ownerId: string; // UID of the user who owns the category being shared
+  categoryName: string;
+  groupId: string;
+  sharedAt: Date;
+  sharedBy: string; // UID of the user who performed the share action
+}
+
 export interface HistoryEntry {
-  action: 
-    | 'created' 
-    | 'updated' 
-    | 'deleted' 
+  action:
+    | 'created'
+    | 'updated'
+    | 'deleted'
     | 'shared' // Legacy individual share
     | 'share_updated' // Legacy individual share
     | 'share_removed' // Legacy individual share
-    | 'restored' 
+    | 'restored'
     | 'cleared'
     | 'group_created'
     | 'group_deleted'
     | 'group_member_added'
     | 'group_member_removed'
     | 'group_member_role_updated'
-    | 'password_shared_with_group'
-    | 'password_unshared_from_group';
-  userId: string; 
+    // | 'password_shared_with_group' // Replaced by category sharing
+    // | 'password_unshared_from_group' // Replaced by category sharing
+    | 'category_shared_with_group'
+    | 'category_unshared_from_group';
+  userId: string;
   timestamp: Date;
-  details?: any; 
+  details?: any;
 }
 
 export interface PasswordEntry {
-  id: string; 
-  ownerId: string; 
+  id: string;
+  ownerId: string;
   userId?: string; // Legacy field, ownerId is preferred
 
   nome: string;
@@ -64,14 +74,23 @@ export interface PasswordEntry {
   createdBy?: { userId: string; timestamp: Date };
   lastModifiedBy?: { userId: string; timestamp: Date };
 
-  sharedWith?: SharedUser[]; // Deprecated for new shares, use sharedWithGroupIds
-  sharedWithGroupIds?: string[]; 
+  sharedWith?: SharedUser[]; // Deprecated for new shares
+
+  // sharedWithGroupIds?: string[]; // REMOVED - Replaced by CategoryShare logic
+
+  // For client-side rendering, to know how this password was accessed if via a shared category
+  sharedVia?: {
+    categoryOwnerId: string;
+    categoryName: string;
+    groupId: string;
+    groupName?: string; // For display convenience
+  };
 
   history?: HistoryEntry[];
-  
-  isDeleted?: boolean; 
+
+  isDeleted?: boolean;
   deletedAt?: Date;
-  deletedBy?: string; 
+  deletedBy?: string;
 }
 
 export type FirebaseUser = FirebaseUserType;

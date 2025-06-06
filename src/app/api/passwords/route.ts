@@ -1,40 +1,94 @@
 
+'use server';
+
 import { NextResponse, type NextRequest } from 'next/server';
 import { connectToDatabase, fromMongo } from '@/lib/mongodb';
-import type { PasswordEntry, Group } from '@/types'; // Added Group
+import type { PasswordEntry, Group, CategoryShare } from '@/types';
 import { ObjectId } from 'mongodb';
 
 export async function GET(request: NextRequest) {
-  const userId = request.headers.get('X-User-ID');
-  if (!userId) {
+  const currentUserId = request.headers.get('X-User-ID');
+  if (!currentUserId) {
     return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
   }
 
   try {
-    const { passwordsCollection, groupsCollection } = await connectToDatabase();
+    const { passwordsCollection, groupsCollection, categorySharesCollection } = await connectToDatabase();
     
-    // Find groups where the user is a member
-    const userGroupDocs = await groupsCollection.find({ 'members.userId': userId }).project({ _id: 1 }).toArray();
+    const allAccessiblePasswords: PasswordEntry[] = [];
+    const processedPasswordIds = new Set<string>();
+
+    // 1. Fetch passwords directly owned by the user
+    const ownedPasswordsRaw = await passwordsCollection.find({ ownerId: currentUserId, isDeleted: { $ne: true } }).toArray();
+    ownedPasswordsRaw.forEach(doc => {
+      const password = fromMongo(doc as any) as PasswordEntry;
+      if (!processedPasswordIds.has(password.id)) {
+        allAccessiblePasswords.push(password);
+        processedPasswordIds.add(password.id);
+      }
+    });
+
+    // 2. Fetch passwords from shared categories
+    const userGroupDocs = await groupsCollection.find({ 'members.userId': currentUserId }).project({ _id: 1, name: 1 }).toArray();
     const userGroupIds = userGroupDocs.map(doc => doc._id.toHexString());
 
-    // Construct the query
-    const query: any = {
-      isDeleted: { $ne: true }, // Exclude soft-deleted passwords
-      $or: [
-        { ownerId: userId }, // User owns the password
-        { userId: userId }, // Legacy ownerId check
-        { 'sharedWith.userId': userId }, // Password is directly shared with the user
-      ]
-    };
-
     if (userGroupIds.length > 0) {
-      query.$or.push({ sharedWithGroupIds: { $in: userGroupIds } }); // Password shared with a group user is in
+      const categorySharesToUserGroups = await categorySharesCollection.find({ groupId: { $in: userGroupIds } }).toArray();
+      
+      for (const share of categorySharesToUserGroups) {
+        if (share.ownerId === currentUserId && ownedPasswordsRaw.some(p => p.category === share.categoryName)) {
+          // These are user's own passwords, already fetched.
+          // We might want to augment them with sharedVia info if not already done.
+           allAccessiblePasswords.forEach(existingPwd => {
+             if (existingPwd.ownerId === share.ownerId && existingPwd.category === share.categoryName && !existingPwd.sharedVia) {
+                const groupDoc = userGroupDocs.find(g => g._id.toHexString() === share.groupId);
+                existingPwd.sharedVia = {
+                    categoryOwnerId: share.ownerId,
+                    categoryName: share.categoryName,
+                    groupId: share.groupId,
+                    groupName: groupDoc?.name || 'Unknown Group'
+                };
+             }
+           });
+          continue;
+        }
+        
+        const passwordsFromSharedCategoryRaw = await passwordsCollection.find({
+          ownerId: share.ownerId,
+          category: share.categoryName,
+          isDeleted: { $ne: true }
+        }).toArray();
+
+        passwordsFromSharedCategoryRaw.forEach(doc => {
+          const password = fromMongo(doc as any) as PasswordEntry;
+          if (!processedPasswordIds.has(password.id)) {
+            const groupDoc = userGroupDocs.find(g => g._id.toHexString() === share.groupId);
+            password.sharedVia = {
+              categoryOwnerId: share.ownerId,
+              categoryName: share.categoryName,
+              groupId: share.groupId,
+              groupName: groupDoc?.name || 'Unknown Group'
+            };
+            allAccessiblePasswords.push(password);
+            processedPasswordIds.add(password.id);
+          } else {
+            // Password already added (likely owned), augment with sharedVia if this is a new share context
+            const existingPwd = allAccessiblePasswords.find(p => p.id === password.id);
+            if (existingPwd && !existingPwd.sharedVia) { // Only add sharedVia if not already set (first share context wins for now)
+                const groupDoc = userGroupDocs.find(g => g._id.toHexString() === share.groupId);
+                existingPwd.sharedVia = {
+                    categoryOwnerId: share.ownerId,
+                    categoryName: share.categoryName,
+                    groupId: share.groupId,
+                    groupName: groupDoc?.name || 'Unknown Group'
+                };
+            }
+          }
+        });
+      }
     }
     
-    const passwordsFromDb = await passwordsCollection.find(query).toArray();
-    const passwords = passwordsFromDb.map(doc => fromMongo(doc as any));
-    
-    return NextResponse.json(passwords, { status: 200 });
+    return NextResponse.json(allAccessiblePasswords, { status: 200 });
   } catch (error) {
     console.error('Failed to fetch passwords:', error);
     return NextResponse.json({ message: 'Failed to fetch passwords', error: (error as Error).message }, { status: 500 });
@@ -48,16 +102,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const entryData = (await request.json()) as Omit<PasswordEntry, 'id' | 'userId' | 'ownerId' | 'sharedWith' | 'sharedWithGroupIds' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy'>;
+    // sharedVia is a client-side field, remove it before saving
+    const { sharedVia, ...entryData } = (await request.json()) as Omit<PasswordEntry, 'id' | 'ownerId' | 'userId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt'>;
     
-    const entryDataWithOwner: Omit<PasswordEntry, 'id'> = {
+    const entryDataWithOwner: Omit<PasswordEntry, 'id' | 'sharedVia'> = {
       ...entryData,
-      ownerId: userId, // Set ownerId to current user
-      userId: userId, // Also set legacy userId for compatibility if needed, though ownerId is primary
+      ownerId: userId,
+      userId: userId, 
       createdAt: new Date(),
       createdBy: { userId: userId, timestamp: new Date() },
-      sharedWith: [],
-      sharedWithGroupIds: [],
+      sharedWith: [], // Legacy, clear it.
       history: [{ action: 'created', userId: userId, timestamp: new Date() }],
       isDeleted: false,
     };
