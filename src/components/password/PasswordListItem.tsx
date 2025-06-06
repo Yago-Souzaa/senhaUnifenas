@@ -6,7 +6,7 @@ import type { PasswordEntry } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban, EllipsisVertical } from 'lucide-react';
+import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban, EllipsisVertical, Check } from 'lucide-react'; // Adicionado Check
 import {
   AlertDialog,
   AlertDialogAction,
@@ -82,7 +82,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab }: Passwor
                   )}
                   aria-label="Copiar Nome"
                 >
-                  <Copy size={14} />
+                  {copiedField === `nome-${entry.id}` ? <Check size={14} /> : <Copy size={14} />}
                 </Button>
               </div>
             </div>
@@ -104,7 +104,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab }: Passwor
                 )}
                 aria-label="Copiar Categoria"
               >
-                <Copy size={10} />
+                {copiedField === `categoria-${entry.id}` ? <Check size={10} /> : <Copy size={10} />}
               </Button>
             </div>
           )}
@@ -128,7 +128,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab }: Passwor
                 <AlertDialogTrigger asChild>
                   <DropdownMenuItem
                     className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
-                    onSelect={(e) => e.preventDefault()} // Evita fechar o dropdown ao clicar para abrir o AlertDialog
+                    onSelect={(e) => e.preventDefault()} 
                   >
                     <Trash2 size={16} className="mr-2" />
                     Deletar
@@ -169,7 +169,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab }: Passwor
               )}
               aria-label="Copiar Login"
             >
-              <Copy size={14} />
+              {copiedField === `login-${entry.id}` ? <Check size={14} /> : <Copy size={14} />}
             </Button>
           </div>
           <div className="flex items-center">
@@ -198,7 +198,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab }: Passwor
               )}
               aria-label="Copiar Senha"
             >
-              <Copy size={14} />
+              {copiedField === `senha-${entry.id}` ? <Check size={14} /> : <Copy size={14} />}
             </Button>
           </div>
 
@@ -220,7 +220,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab }: Passwor
                       )}
                       aria-label={`Copiar valor do campo ${field.label}`}
                     >
-                      <Copy size={12} />
+                      {copiedField === `customFieldValue-${entry.id}-${index}` ? <Check size={12} /> : <Copy size={12} />}
                   </Button>
                 </div>
               ))}
@@ -231,3 +231,4 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab }: Passwor
     </Card>
   );
 }
+

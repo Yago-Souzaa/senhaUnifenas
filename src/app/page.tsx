@@ -12,9 +12,9 @@ import { PasswordGeneratorDialog } from '@/components/password/PasswordGenerator
 import { ClearAllPasswordsDialog } from '@/components/password/ClearAllPasswordsDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label'; // Keep for other dialogs if needed, check usage
+import { Label } from '@/components/ui/label'; 
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-// Tabs components are no longer needed for auth section
+
 import { useToast } from '@/hooks/use-toast';
 import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, XCircle, KeyRound, EllipsisVertical, FolderKanban, Plus, X } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -41,8 +41,7 @@ import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 import { auth, googleProvider } from '@/lib/firebase';
 import {
-  // createUserWithEmailAndPassword, // No longer needed
-  // signInWithEmailAndPassword, // No longer needed
+
   signInWithPopup,
   signOut,
   onAuthStateChanged,
@@ -66,10 +65,6 @@ const ALLOWED_GOOGLE_DOMAINS = ['@unifenas.br', 'aluno.unifenas.br', '@adm.unife
 export default function HomePage() {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-
-  // Email and password state no longer needed
-  // const [email, setEmail] = useState('');
-  // const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
 
   const {
@@ -107,8 +102,6 @@ export default function HomePage() {
       setFirebaseUser(user);
       setAuthLoading(false);
       if (user) {
-        // setEmail(''); // No longer needed
-        // setPassword(''); // No longer needed
         setAuthError(null);
         const storedCategories = localStorage.getItem(`userCategories_${user.uid}`);
         if (storedCategories) {
@@ -163,7 +156,7 @@ export default function HomePage() {
         errorMessage = "Senha incorreta.";
         break;
       case 'auth/invalid-credential':
-        errorMessage = "Credenciais inválidas. Verifique os dados e tente novamente."; // General for Google if specific error not caught
+        errorMessage = "Credenciais inválidas. Verifique os dados e tente novamente."; 
         break;
       case 'auth/email-already-in-use':
         errorMessage = "Este email já está em uso por outra conta.";
@@ -183,6 +176,9 @@ export default function HomePage() {
       case 'auth/account-exists-with-different-credential':
         errorMessage = "Já existe uma conta com este endereço de e-mail, mas com um método de login diferente. Tente fazer login com o método original ou entre em contato com o suporte.";
         break;
+      case 'auth/unauthorized-domain':
+        errorMessage = `O domínio do seu e-mail não está autorizado para esta aplicação. Por favor, use uma conta dos domínios permitidos: ${ALLOWED_GOOGLE_DOMAINS.join(', ')}.`;
+        break;
       default:
         errorMessage = (error as Error).message || "Ocorreu um erro de autenticação desconhecido.";
     }
@@ -190,8 +186,6 @@ export default function HomePage() {
     toast({ title: "Erro de Autenticação", description: errorMessage, variant: "destructive"});
   };
 
-  // handleRegisterWithEmail no longer needed
-  // handleLoginWithEmail no longer needed
 
   const handleLoginWithGoogle = async () => {
     setAuthError(null);
@@ -449,9 +443,12 @@ export default function HomePage() {
             <Card className="w-full max-w-md shadow-xl">
               <CardHeader className="text-center">
                 <CardTitle className="font-headline text-2xl text-primary flex items-center justify-center gap-2">
-                   <KeyRound size={24}/> Autenticação
+                   <KeyRound size={24}/> Entrar
                 </CardTitle>
                 <CardDescription>Use sua conta Google dos domínios permitidos para acessar.</CardDescription>
+                <p className="text-xs text-muted-foreground pt-1">
+                  Domínios permitidos: {ALLOWED_GOOGLE_DOMAINS.join(', ')}.
+                </p>
               </CardHeader>
               <CardContent className="px-6 pb-6 pt-2">
                 {authError && <p className="text-sm text-destructive text-center mb-4">{authError}</p>}
@@ -538,7 +535,7 @@ export default function HomePage() {
             </div>
 
             <div className="mb-4">
-               {/* Using simple Buttons for category tabs as Tabs component was conflicting */}
+               
                <div className="flex items-center border-b">
                   <ScrollArea className="w-full whitespace-nowrap">
                      <div className="flex space-x-1 pb-1">
@@ -558,14 +555,14 @@ export default function HomePage() {
                                  variant={activeTab === category ? "secondary" : "ghost"}
                                  size="sm"
                                  onClick={() => setActiveTab(category)}
-                                 className="flex items-center gap-1.5 h-8 px-3 rounded-md pr-7" // Added pr-7 for spacing X button
+                                 className="flex items-center gap-1.5 h-8 px-3 rounded-md pr-7" 
                               >
                                  <FolderKanban size={14} />
                                  {category}
                               </Button>
                               {isCategoryEmpty && (
                                  <Button
-                                    asChild // Important for custom clickable div inside
+                                    asChild 
                                     variant="ghost"
                                     size="icon"
                                     className="absolute top-1/2 right-0.5 -translate-y-1/2 h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-destructive/20"
@@ -573,14 +570,14 @@ export default function HomePage() {
                                  >
                                     <div
                                        role="button"
-                                       tabIndex={0} // Make it focusable
+                                       tabIndex={0} 
                                        onClick={(e) => {
-                                       e.stopPropagation(); // Prevent tab activation
+                                       e.stopPropagation(); 
                                        e.preventDefault();
                                        setCategoryToDelete(category);
                                        setIsDeleteCategoryDialogOpen(true);
                                        }}
-                                       onKeyDown={(e) => { // For accessibility
+                                       onKeyDown={(e) => { 
                                        if (e.key === 'Enter' || e.key === ' ') {
                                           e.stopPropagation();
                                           e.preventDefault();
@@ -638,7 +635,7 @@ export default function HomePage() {
                      </AlertDialogContent>
                   </AlertDialog>
                </div>
-               <div className="mt-4"> {/* This div wraps the PasswordList */}
+               <div className="mt-4"> 
                   <PasswordList
                      passwords={filteredPasswords}
                      isLoading={passwordsLoading}
