@@ -8,10 +8,9 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogClose,
+  // DialogClose, // No longer needed here if footer is removed
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -354,12 +353,7 @@ export function SharePasswordDialog({
             </div>
           </div>
         </ScrollArea>
-
-        <DialogFooter className="mt-auto pt-4 sticky bottom-0 bg-card border-t">
-          <DialogClose asChild>
-            <Button type="button" variant="outline" disabled={isSubmitting}>remover</Button>
-          </DialogClose>
-        </DialogFooter>
+        {/* DialogFooter removed as requested */}
       </DialogContent>
     </Dialog>
   );
