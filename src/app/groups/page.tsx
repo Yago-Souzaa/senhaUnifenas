@@ -336,7 +336,7 @@ export default function GroupsPage() {
                                     {group.members.map(member => (
                                         <li key={member.userId} className="flex justify-between items-center">
                                             <span className="truncate" title={member.userId}>
-                                                {member.displayName || `UID: ...${member.userId.slice(-8)}`}
+                                                {member.displayName || `UID: ${member.userId.substring(0,4)}...${member.userId.slice(-4)}`}
                                                 {member.userId === firebaseUser.uid && " (Você)"}
                                             </span>
                                             <Badge variant={member.role === 'admin' ? "default" : "secondary"}>{member.role}</Badge>
@@ -478,7 +478,7 @@ export default function GroupsPage() {
                                           {member.displayName || "Nome não definido"}
                                         </p>
                                         <p className="font-mono text-muted-foreground text-[0.7rem] truncate" title={member.userId}>
-                                          UID: ...{member.userId.slice(-10)}
+                                          UID: {member.userId.substring(0,6)}...{member.userId.slice(-6)}
                                         </p>
                                         {isMemberOwner && <Badge variant="outline" className="ml-0 mt-1 text-primary border-primary text-[0.65rem] px-1 py-0">Proprietário</Badge>}
                                         {isCurrentUserTheMemberBeingListed && !isMemberOwner && <Badge variant="secondary" className="ml-0 mt-1 text-[0.65rem] px-1 py-0">Você</Badge>}
@@ -528,6 +528,3 @@ export default function GroupsPage() {
     </div>
   );
 }
-
-
-    

@@ -120,7 +120,7 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-2 bg-muted p-3 rounded-md">
                     <UserSquare2 size={18} className="text-muted-foreground shrink-0"/>
                     <p className="text-sm text-muted-foreground break-all flex-grow" title={firebaseUser.uid}>
-                        {firebaseUser.uid}
+                        {firebaseUser.uid.substring(0,12)}...{firebaseUser.uid.slice(-12)}
                     </p>
                     <Button
                         variant="ghost"
@@ -129,8 +129,8 @@ export default function SettingsPage() {
                         className={cn(
                           "h-7 w-7 shrink-0 transition-transform duration-150",
                           copiedUid
-                            ? 'scale-110 bg-primary text-primary-foreground hover:bg-primary/90' // Mantém o hover primário quando copiado
-                            : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground' // Usa hover secundário quando não copiado
+                            ? 'scale-110 bg-primary text-primary-foreground hover:bg-primary/90'
+                            : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground'
                         )}
                         aria-label="Copiar UID"
                     >
