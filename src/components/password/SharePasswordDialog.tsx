@@ -123,7 +123,7 @@ export function SharePasswordDialog({
   const getSharedByDisplay = (sharedBy?: string) => {
     if (!sharedBy) return 'N/A';
     if (sharedBy === currentUserId) return 'Você';
-    return `UID: ...${sharedBy.slice(-6)}`; // Mostra os últimos 6 caracteres do UID para breve identificação
+    return `UID: ...${sharedBy.slice(-6)}`;
   }
 
   return (
