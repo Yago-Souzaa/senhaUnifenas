@@ -60,8 +60,7 @@ const GoogleIcon = () => (
   </svg>
 );
 
-// !!! IMPORTANTE: Altere '@seudominio.com' para o domínio que você quer permitir !!!
-const ALLOWED_GOOGLE_DOMAIN = '@seudominio.com';
+const ALLOWED_GOOGLE_DOMAINS = ['@unifenas.br', 'aluno.unifenas.br', '@adm.unifenas.br'];
 
 
 export default function HomePage() {
@@ -226,12 +225,23 @@ export default function HomePage() {
     setAuthError(null);
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      // Verificação de domínio
-      if (result.user.email && !result.user.email.endsWith(ALLOWED_GOOGLE_DOMAIN)) {
-        await signOut(auth); // Desloga o usuário imediatamente
-        const errorMessage = `Acesso permitido apenas para usuários do domínio ${ALLOWED_GOOGLE_DOMAIN}.`;
+      const userEmail = result.user.email;
+
+      if (userEmail) {
+        const isAllowed = ALLOWED_GOOGLE_DOMAINS.some(domain => userEmail.endsWith(domain));
+        if (!isAllowed) {
+          await signOut(auth);
+          const errorMessage = `Acesso permitido apenas para usuários dos domínios: ${ALLOWED_GOOGLE_DOMAINS.join(', ')}.`;
+          setAuthError(errorMessage);
+          toast({ title: "Acesso Restrito", description: errorMessage, variant: "destructive" });
+          return;
+        }
+      } else {
+        // Caso o email não seja retornado (raro, mas para segurança)
+        await signOut(auth);
+        const errorMessage = "Não foi possível verificar o domínio do email. Tente novamente.";
         setAuthError(errorMessage);
-        toast({ title: "Acesso Restrito", description: errorMessage, variant: "destructive" });
+        toast({ title: "Erro na Verificação", description: errorMessage, variant: "destructive" });
         return;
       }
       toast({ title: "Login com Google bem-sucedido!", description: "Bem-vindo!" });
