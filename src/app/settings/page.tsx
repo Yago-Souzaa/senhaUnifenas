@@ -63,7 +63,7 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground mb-6">Você precisa estar logado para acessar as configurações da sua conta.</p>
-              <Button asChild className="bg-primary hover:bg-primary/90 w-full">
+              <Button asChild className="w-full">
                 <Link href="/">Ir para Login</Link>
               </Button>
             </CardContent>
@@ -80,7 +80,7 @@ export default function SettingsPage() {
     <div className="min-h-screen flex flex-col">
       <Header user={firebaseUser} onLogout={handleLogoutFirebase} />
       <main className="container mx-auto py-8 px-4 flex-grow">
-        <Button variant="ghost" asChild className="mb-6 text-primary hover:bg-primary/90 hover:text-primary-foreground">
+        <Button variant="ghost" asChild className="mb-6 text-primary hover:bg-primary/10 hover:text-primary">
           <Link href="/">
             <ArrowLeft size={18} className="mr-2" />
             Voltar para Início
@@ -128,3 +128,6 @@ export default function SettingsPage() {
     </div>
   );
 }
+
+
+    

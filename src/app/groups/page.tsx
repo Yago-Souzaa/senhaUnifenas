@@ -192,8 +192,9 @@ export default function GroupsPage() {
         if (updatedGroupFromHook) {
           setEditingGroup(updatedGroupFromHook);
         } else {
+          // Fallback if the hook for some reason doesn't return the updated group (should not happen with current logic)
           setIsManageMembersDialogOpen(false); 
-          await fetchGroups(); 
+          await fetchGroups(); // Refetch all groups to be safe
         }
     } catch (e: any) {
         toast({ title: "Erro ao Remover Membro", description: e.message || "Não foi possível remover o membro.", variant: "destructive" });
@@ -234,7 +235,7 @@ export default function GroupsPage() {
             </CardHeader>
             <CardContent>
               <p className="text-muted-foreground mb-6">Você precisa estar logado para gerenciar seus grupos.</p>
-              <Button asChild className="bg-primary hover:bg-primary/90 w-full">
+              <Button asChild className="w-full">
                 <Link href="/">Ir para Login</Link>
               </Button>
             </CardContent>
@@ -304,7 +305,7 @@ export default function GroupsPage() {
                                 {canManageGroup && (
                                      <DropdownMenu>
                                         <DropdownMenuTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:bg-secondary hover:text-secondary-foreground">
                                                 <EllipsisVertical size={18} />
                                             </Button>
                                         </DropdownMenuTrigger>
@@ -527,3 +528,6 @@ export default function GroupsPage() {
     </div>
   );
 }
+
+
+    
