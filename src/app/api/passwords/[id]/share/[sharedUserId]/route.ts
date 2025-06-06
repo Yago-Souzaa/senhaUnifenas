@@ -13,17 +13,16 @@ interface ShareManagementParams {
 
 // PUT /api/passwords/[id]/share/[sharedUserId]
 export async function PUT(request: NextRequest, { params }: { params: ShareManagementParams }) {
-  const ownerUserId = request.headers.get('X-User-ID');
-  if (!ownerUserId) {
+  const currentActionUserId = request.headers.get('X-User-ID'); // User performing the action
+  if (!currentActionUserId) {
     return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
   }
 
   try {
-    const { id: passwordId, sharedUserId } = params;
+    const { id: passwordId, sharedUserId: targetSharedUserId } = params;
     if (!ObjectId.isValid(passwordId)) {
       return NextResponse.json({ message: 'Invalid Password ID format' }, { status: 400 });
     }
-    // Assuming sharedUserId is a valid string format (e.g., Firebase UID)
 
     const { permission } = (await request.json()) as { permission: 'read' | 'full' };
 
@@ -38,7 +37,8 @@ export async function PUT(request: NextRequest, { params }: { params: ShareManag
       return NextResponse.json({ message: 'Password not found' }, { status: 404 });
     }
 
-    if (passwordDoc.ownerId !== ownerUserId) {
+    const effectiveOwnerId = passwordDoc.ownerId || passwordDoc.userId;
+    if (effectiveOwnerId !== currentActionUserId) {
       return NextResponse.json({ message: 'Only the password owner can modify shares' }, { status: 403 });
     }
 
@@ -46,47 +46,58 @@ export async function PUT(request: NextRequest, { params }: { params: ShareManag
         return NextResponse.json({ message: 'Cannot modify shares for a deleted password' }, { status: 400 });
     }
 
-    const shareIndex = passwordDoc.sharedWith?.findIndex(s => s.userId === sharedUserId);
-    if (shareIndex === -1 || !passwordDoc.sharedWith) {
+    const shareIndex = passwordDoc.sharedWith?.findIndex(s => s.userId === targetSharedUserId);
+    
+    if (!passwordDoc.sharedWith || shareIndex === undefined || shareIndex === -1) {
       return NextResponse.json({ message: 'Share not found for this user' }, { status: 404 });
     }
 
     const oldPermission = passwordDoc.sharedWith[shareIndex].permission;
     if (oldPermission === permission) {
-        return NextResponse.json({ message: 'Permission is already set to this value', sharedWith: passwordDoc.sharedWith }, { status: 200 });
+        // Fetch the current document to ensure the returned sharedWith is up-to-date, even if no change.
+        const currentDoc = await passwordsCollection.findOne({ _id: new ObjectId(passwordId) });
+        return NextResponse.json({ message: 'Permission is already set to this value', sharedWith: currentDoc?.sharedWith || [] }, { status: 200 });
     }
 
-    const updatedSharedWith = [...passwordDoc.sharedWith];
-    updatedSharedWith[shareIndex] = { ...updatedSharedWith[shareIndex], permission };
-
+    // Create a new array for sharedWith to ensure MongoDB detects the change properly
+    const updatedSharedWithArray = passwordDoc.sharedWith.map((share, index) => {
+        if (index === shareIndex) {
+            return { ...share, permission: permission };
+        }
+        return share;
+    });
+    
     const newHistoryEntry: HistoryEntry = {
       action: 'share_updated',
-      userId: ownerUserId,
+      userId: currentActionUserId,
       timestamp: new Date(),
-      details: { sharedUserId, oldPermission, newPermission: permission }
+      details: { sharedUserId: targetSharedUserId, oldPermission, newPermission: permission }
     };
     const updatedHistory = [newHistoryEntry, ...(passwordDoc.history || [])].slice(0, 10);
 
     const result = await passwordsCollection.updateOne(
-      { _id: new ObjectId(passwordId), ownerId: ownerUserId, "sharedWith.userId": sharedUserId },
+      { _id: new ObjectId(passwordId) }, // Query by _id only, ownership already validated
       { 
         $set: { 
-            "sharedWith.$": updatedSharedWith[shareIndex], // Update specific element in array
-            lastModifiedBy: { userId: ownerUserId, timestamp: new Date() },
+            sharedWith: updatedSharedWithArray, 
+            lastModifiedBy: { userId: currentActionUserId, timestamp: new Date() },
             history: updatedHistory,
         }
       }
     );
-
-    if (result.matchedCount === 0) {
-        // This could happen if sharedUserId was not found by the query selector, even if owner matches
-        return NextResponse.json({ message: 'Password or specific share not found for update' }, { status: 404 });
+    
+    if (result.matchedCount === 0) { // Should not happen if doc was found earlier
+        return NextResponse.json({ message: 'Password not found for update (unexpected)' }, { status: 404 });
+    }
+    if (result.modifiedCount === 0 && oldPermission !== permission) {
+        // This might happen if the document was somehow changed between findOne and updateOne,
+        // or if MongoDB didn't see the array update as a modification (less likely with new array).
+        console.warn(`Share PUT: Password ${passwordId} matched but not modified for user ${targetSharedUserId}, despite different permissions. Old: ${oldPermission}, New: ${permission}`);
     }
     
-    // Fetch the document again to return the latest sharedWith array, as $set on an array element doesn't return the full updated array directly
     const updatedDoc = await passwordsCollection.findOne({ _id: new ObjectId(passwordId) });
 
-    return NextResponse.json({ message: 'Share permission updated successfully', sharedWith: updatedDoc?.sharedWith }, { status: 200 });
+    return NextResponse.json({ message: 'Share permission updated successfully', sharedWith: updatedDoc?.sharedWith || [] }, { status: 200 });
 
   } catch (error) {
     console.error('Failed to update share permission:', error);
@@ -97,13 +108,13 @@ export async function PUT(request: NextRequest, { params }: { params: ShareManag
 
 // DELETE /api/passwords/[id]/share/[sharedUserId]
 export async function DELETE(request: NextRequest, { params }: { params: ShareManagementParams }) {
-  const ownerUserId = request.headers.get('X-User-ID');
-  if (!ownerUserId) {
+  const currentActionUserId = request.headers.get('X-User-ID'); // User performing the action
+  if (!currentActionUserId) {
     return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
   }
 
   try {
-    const { id: passwordId, sharedUserId } = params;
+    const { id: passwordId, sharedUserId: targetSharedUserId } = params;
     if (!ObjectId.isValid(passwordId)) {
       return NextResponse.json({ message: 'Invalid Password ID format' }, { status: 400 });
     }
@@ -115,50 +126,53 @@ export async function DELETE(request: NextRequest, { params }: { params: ShareMa
       return NextResponse.json({ message: 'Password not found' }, { status: 404 });
     }
 
-    if (passwordDoc.ownerId !== ownerUserId) {
+    const effectiveOwnerId = passwordDoc.ownerId || passwordDoc.userId;
+    if (effectiveOwnerId !== currentActionUserId) {
       return NextResponse.json({ message: 'Only the password owner can remove shares' }, { status: 403 });
     }
     
     if (passwordDoc.isDeleted) {
-        // Technically could allow removing shares from a soft-deleted password, but for consistency:
         return NextResponse.json({ message: 'Cannot modify shares for a deleted password' }, { status: 400 });
     }
 
-    const shareExists = passwordDoc.sharedWith?.some(s => s.userId === sharedUserId);
+    const shareExists = passwordDoc.sharedWith?.some(s => s.userId === targetSharedUserId);
     if (!shareExists) {
-      return NextResponse.json({ message: 'Share not found for this user to remove' }, { status: 404 });
+      // Fetch current doc to return consistent sharedWith array
+      const currentDoc = await passwordsCollection.findOne({ _id: new ObjectId(passwordId) });
+      return NextResponse.json({ message: 'Share not found for this user to remove', sharedWith: currentDoc?.sharedWith || [] }, { status: 404 });
     }
     
     const newHistoryEntry: HistoryEntry = {
       action: 'share_removed',
-      userId: ownerUserId,
+      userId: currentActionUserId,
       timestamp: new Date(),
-      details: { removedUserId: sharedUserId }
+      details: { removedUserId: targetSharedUserId }
     };
     const updatedHistory = [newHistoryEntry, ...(passwordDoc.history || [])].slice(0, 10);
 
     const result = await passwordsCollection.updateOne(
-      { _id: new ObjectId(passwordId), ownerId: ownerUserId },
+      { _id: new ObjectId(passwordId) }, // Query by _id, ownership validated
       { 
-        $pull: { sharedWith: { userId: sharedUserId } },
+        $pull: { sharedWith: { userId: targetSharedUserId } },
         $set: { 
-            lastModifiedBy: { userId: ownerUserId, timestamp: new Date() },
+            lastModifiedBy: { userId: currentActionUserId, timestamp: new Date() },
             history: updatedHistory,
         }
       }
     );
 
     if (result.modifiedCount === 0 && result.matchedCount > 0) {
-      // Matched but didn't modify, means the sharedUserId wasn't in the array to pull
-      return NextResponse.json({ message: 'Share not found for this user to remove or already removed' }, { status: 404 });
+      // This means the $pull didn't remove anything, which could happen if the share was already removed
+      // or if targetSharedUserId wasn't in the array for some reason.
+      console.warn(`Share DELETE: Password ${passwordId} matched but not modified for pulling user ${targetSharedUserId}. Share might have been already removed.`);
     }
-    if (result.matchedCount === 0) {
-        return NextResponse.json({ message: 'Password not found or not owned by user' }, { status: 404 });
+     if (result.matchedCount === 0) { // Should not happen
+        return NextResponse.json({ message: 'Password not found for share removal (unexpected)' }, { status: 404 });
     }
     
     const updatedDoc = await passwordsCollection.findOne({ _id: new ObjectId(passwordId) });
 
-    return NextResponse.json({ message: 'Share removed successfully', sharedWith: updatedDoc?.sharedWith }, { status: 200 });
+    return NextResponse.json({ message: 'Share removed successfully', sharedWith: updatedDoc?.sharedWith || [] }, { status: 200 });
 
   } catch (error) {
     console.error('Failed to remove share:', error);

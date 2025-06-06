@@ -40,7 +40,8 @@ export async function POST(request: NextRequest, { params }: { params: SharePara
       return NextResponse.json({ message: 'Password not found' }, { status: 404 });
     }
 
-    if (passwordDoc.ownerId !== sharerUserId) {
+    const effectiveOwnerId = passwordDoc.ownerId || passwordDoc.userId; // Check ownerId, fallback to userId
+    if (effectiveOwnerId !== sharerUserId) {
       return NextResponse.json({ message: 'Only the password owner can share it' }, { status: 403 });
     }
     
@@ -50,10 +51,6 @@ export async function POST(request: NextRequest, { params }: { params: SharePara
 
     const existingShareIndex = passwordDoc.sharedWith?.findIndex(s => s.userId === userIdToShareWith);
     if (existingShareIndex !== -1) {
-      // If user already exists, update their permission instead of adding a new entry.
-      // Or, you could return an error: return NextResponse.json({ message: 'Password already shared with this user. Use update endpoint.' }, { status: 409 });
-      // For simplicity, let's allow POST to update if exists, or use PUT on the specific share.
-      // Here, let's assume POST is for new shares. For updates, a dedicated PUT is better.
       return NextResponse.json({ message: 'Password already shared with this user. Use update if you want to change permissions.' }, { status: 409 });
     }
     
@@ -75,7 +72,7 @@ export async function POST(request: NextRequest, { params }: { params: SharePara
     const updatedHistory = [newHistoryEntry, ...(passwordDoc.history || [])].slice(0, 10);
 
     const result = await passwordsCollection.updateOne(
-      { _id: new ObjectId(passwordId), ownerId: sharerUserId },
+      { _id: new ObjectId(passwordId) }, // No longer need ownerId in query here, already validated above
       { 
         $set: { 
             sharedWith: updatedSharedWith,
@@ -85,9 +82,13 @@ export async function POST(request: NextRequest, { params }: { params: SharePara
       }
     );
 
-    if (result.matchedCount === 0) {
-      return NextResponse.json({ message: 'Password not found or not owned by user' }, { status: 404 });
+    // matchedCount check is less critical here since we found the doc and validated ownership.
+    // If result.modifiedCount is 0 and we expected a change, that might indicate an issue, but for $set on new shares, it should be 1.
+    if (result.modifiedCount === 0) {
+        // This could happen if something went wrong with the update itself, though unlikely for $set.
+        console.warn(`Share POST: Password ${passwordId} matched but not modified. This might be unexpected.`);
     }
+
 
     return NextResponse.json({ message: 'Password shared successfully', sharedWith: updatedSharedWith }, { status: 200 });
 
