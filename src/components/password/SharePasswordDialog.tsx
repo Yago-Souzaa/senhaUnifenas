@@ -74,6 +74,7 @@ export function SharePasswordDialog({
       toast({ title: "Ação Não Permitida", description: "Você não pode compartilhar uma senha consigo mesmo.", variant: "destructive" });
       return;
     }
+    // Client-side check if already shared
     if (passwordEntry.sharedWith?.some(s => s.userId === userIdToShareWith.trim())) {
       toast({ title: "Já Compartilhado", description: "Esta senha já está compartilhada com este usuário. Edite a permissão existente se necessário.", variant: "default" });
       return;
@@ -84,6 +85,7 @@ export function SharePasswordDialog({
       await onSharePassword(passwordEntry.id, userIdToShareWith.trim(), permission);
       toast({ title: "Sucesso!", description: `Senha compartilhada com o usuário.` });
       setUserIdToShareWith(''); 
+      setPermission('read'); // Reset permission for next share
     } catch (error: any) {
       toast({ title: "Erro ao Compartilhar", description: error.message || "Não foi possível adicionar o compartilhamento.", variant: "destructive" });
     } finally {
@@ -125,6 +127,8 @@ export function SharePasswordDialog({
     if (sharedBy === currentUserId) return 'Você';
     return `UID: ...${sharedBy.slice(-6)}`;
   }
+
+  const hasExistingShares = passwordEntry.sharedWith && passwordEntry.sharedWith.length > 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!isSubmitting) onOpenChange(open); }}>
@@ -181,13 +185,13 @@ export function SharePasswordDialog({
 
             <div className="space-y-3">
               <h3 className="text-md font-semibold text-foreground flex items-center gap-2"><ListChecks size={18}/>Gerenciar Compartilhamentos Atuais</h3>
-              {(!passwordEntry.sharedWith || passwordEntry.sharedWith.length === 0) ? (
+              {!hasExistingShares ? (
                 <p className="text-xs text-muted-foreground p-3 bg-muted/20 rounded-md flex items-center gap-2">
                   <AlertCircle size={16} /> Esta senha ainda não foi compartilhada com outros usuários.
                 </p>
               ) : (
                 <ul className="space-y-2">
-                  {passwordEntry.sharedWith.map((share) => (
+                  {passwordEntry.sharedWith?.map((share) => (
                     <li key={share.userId} className="p-3 border rounded-md bg-background flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div className="flex-grow min-w-0">
                         <p className="text-sm font-medium text-foreground truncate flex items-center gap-1.5" title={share.userId}>
@@ -248,3 +252,5 @@ export function SharePasswordDialog({
     </Dialog>
   );
 }
+
+    
