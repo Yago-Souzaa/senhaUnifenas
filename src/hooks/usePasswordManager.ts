@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import type { PasswordEntry } from '@/types';
+import type { PasswordEntry, SharedUser } from '@/types';
 
 const API_BASE_URL = '/api/passwords';
 
@@ -11,7 +11,6 @@ async function parseErrorResponse(response: Response, defaultMessage: string): P
     const errorData = await response.json();
     return errorData.message || defaultMessage;
   } catch (e) {
-    // If response is not JSON, or JSON doesn't have a message, try to get text
     try {
         const textError = await response.text();
         if (textError) return textError;
@@ -22,7 +21,7 @@ async function parseErrorResponse(response: Response, defaultMessage: string): P
   }
 }
 
-export function usePasswordManager(currentUserId?: string | null) { // currentUserId é o UID do Firebase
+export function usePasswordManager(currentUserId?: string | null) {
   const [passwords, setPasswords] = useState<PasswordEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +59,7 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
     fetchPasswords();
   }, [fetchPasswords]);
 
-  const addPassword = useCallback(async (entryData: Omit<PasswordEntry, 'id' | 'userId'>) => {
+  const addPassword = useCallback(async (entryData: Omit<PasswordEntry, 'id' | 'ownerId' | 'userId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy'>) => {
     if (!currentUserId) {
       const err = new Error('User not authenticated');
       setError(err.message);
@@ -69,7 +68,8 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
     setIsLoading(true);
     setError(null);
     try {
-      const payload = { ...entryData, userId: currentUserId };
+      // ownerId, createdBy, history, etc., will be set by the backend
+      const payload = { ...entryData }; 
       const response = await fetch(API_BASE_URL, {
         method: 'POST',
         headers: { 
@@ -94,21 +94,17 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
     }
   }, [currentUserId]);
 
-  const updatePassword = useCallback(async (updatedEntry: PasswordEntry) => {
+  const updatePassword = useCallback(async (updatedEntry: Omit<PasswordEntry, 'ownerId' | 'userId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy'> & { id: string }) => {
     if (!currentUserId) {
       const err = new Error('User not authenticated');
       setError(err.message);
       throw err;
     }
-    if (updatedEntry.userId && updatedEntry.userId !== currentUserId) {
-        const err = new Error('User not authorized to update this entry');
-        setError(err.message);
-        throw err;
-    }
     setIsLoading(true);
     setError(null);
     try {
-      const payload = { ...updatedEntry, userId: currentUserId };
+      // Backend will handle ownerId check and other fields like history, lastModifiedBy
+      const payload = { ...updatedEntry }; 
       const response = await fetch(`${API_BASE_URL}/${updatedEntry.id}`, {
         method: 'PUT',
         headers: { 
@@ -152,7 +148,14 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
         const errorMessage = await parseErrorResponse(response, `Failed to delete password: ${response.statusText}`);
         throw new Error(errorMessage);
       }
-      setPasswords(prev => prev.filter(p => p.id !== id));
+      // Soft delete: update local state to reflect the change
+      // The API response for DELETE (soft delete) should ideally return the updated entry or a success message.
+      // For simplicity, let's assume the API confirms soft delete and we update locally.
+      // Or, the fetchPasswords could be re-called, but that's less efficient.
+      // The current API returns a message. We can update the local entry if API returned it, or filter if it was a hard delete (which it isn't anymore).
+      // Let's update the local state to mark it as deleted to match backend behavior.
+      setPasswords(prev => prev.map(p => p.id === id ? { ...p, isDeleted: true } : p).filter(p => !p.isDeleted));
+
     } catch (err: any) {
       console.error("Failed to delete password:", err);
       setError(err.message || 'An unknown error occurred while deleting password.');
@@ -173,7 +176,7 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('userId', currentUserId);
+      formData.append('userId', currentUserId); 
       
       const response = await fetch(`${API_BASE_URL}/import`, {
         method: 'POST',
@@ -183,7 +186,7 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
         }
       });
 
-      const result = await response.json(); // Assume result is always JSON here based on current API
+      const result = await response.json();
 
       if (!response.ok) {
         throw new Error(result.message || `Failed to import passwords: ${response.statusText}`);
@@ -279,10 +282,110 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
         const errorMessage = await parseErrorResponse(response, `Failed to clear passwords: ${response.statusText}`);
         throw new Error(errorMessage);
       }
-      setPasswords([]);
+      // Soft delete all: update local state to reflect the change.
+      setPasswords(prev => prev.map(p => ({...p, isDeleted: true })).filter(p => !p.isDeleted));
     } catch (err: any) {
       console.error("Failed to clear passwords:", err);
       setError(err.message || 'An unknown error occurred while clearing passwords.');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUserId]);
+
+  // --- Funções de Compartilhamento ---
+
+  const sharePassword = useCallback(async (passwordId: string, userIdToShareWith: string, permission: 'read' | 'full'): Promise<SharedUser[] | undefined> => {
+    if (!currentUserId) {
+      const err = new Error('User not authenticated to share password');
+      setError(err.message);
+      throw err;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/${passwordId}/share`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': currentUserId,
+        },
+        body: JSON.stringify({ userIdToShareWith, permission }),
+      });
+      if (!response.ok) {
+        const errorMessage = await parseErrorResponse(response, 'Failed to share password');
+        throw new Error(errorMessage);
+      }
+      const { sharedWith } = await response.json() as { sharedWith: SharedUser[] };
+      setPasswords(prev => prev.map(p => p.id === passwordId ? { ...p, sharedWith: sharedWith } : p));
+      return sharedWith;
+    } catch (err: any) {
+      console.error("Failed to share password:", err);
+      setError(err.message || 'An unknown error occurred while sharing password.');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUserId]);
+
+  const updateSharePermission = useCallback(async (passwordId: string, sharedUserId: string, permission: 'read' | 'full'): Promise<SharedUser[] | undefined> => {
+    if (!currentUserId) {
+      const err = new Error('User not authenticated to update share permission');
+      setError(err.message);
+      throw err;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/${passwordId}/share/${sharedUserId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': currentUserId,
+        },
+        body: JSON.stringify({ permission }),
+      });
+      if (!response.ok) {
+        const errorMessage = await parseErrorResponse(response, 'Failed to update share permission');
+        throw new Error(errorMessage);
+      }
+      const { sharedWith } = await response.json() as { sharedWith: SharedUser[] };
+      setPasswords(prev => prev.map(p => p.id === passwordId ? { ...p, sharedWith: sharedWith } : p));
+      return sharedWith;
+    } catch (err: any) {
+      console.error("Failed to update share permission:", err);
+      setError(err.message || 'An unknown error occurred while updating share permission.');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentUserId]);
+
+  const removeShare = useCallback(async (passwordId: string, sharedUserId: string): Promise<SharedUser[] | undefined> => {
+    if (!currentUserId) {
+      const err = new Error('User not authenticated to remove share');
+      setError(err.message);
+      throw err;
+    }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/${passwordId}/share/${sharedUserId}`, {
+        method: 'DELETE',
+        headers: {
+          'X-User-ID': currentUserId,
+        },
+      });
+      if (!response.ok) {
+        const errorMessage = await parseErrorResponse(response, 'Failed to remove share');
+        throw new Error(errorMessage);
+      }
+      const { sharedWith } = await response.json() as { sharedWith: SharedUser[] };
+      setPasswords(prev => prev.map(p => p.id === passwordId ? { ...p, sharedWith: sharedWith } : p));
+      return sharedWith;
+    } catch (err: any) {
+      console.error("Failed to remove share:", err);
+      setError(err.message || 'An unknown error occurred while removing share.');
       throw err;
     } finally {
       setIsLoading(false);
@@ -302,5 +405,12 @@ export function usePasswordManager(currentUserId?: string | null) { // currentUs
     generatePassword,
     clearAllPasswords,
     exportPasswordsToCSV,
+    // Funções de compartilhamento
+    sharePassword,
+    updateSharePermission,
+    removeShare,
   };
 }
+
+
+    
