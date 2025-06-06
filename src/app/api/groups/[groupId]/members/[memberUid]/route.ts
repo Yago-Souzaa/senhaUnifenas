@@ -8,12 +8,12 @@ import type { GroupMember, Group } from '@/types';
 
 interface GroupMemberManagementParams {
   groupId: string;
-  memberUid: string; 
+  memberUid: string;
 }
 
 // DELETE /api/groups/[groupId]/members/[memberUid] - Remove a member from a group
 export async function DELETE(request: NextRequest, { params }: { params: GroupMemberManagementParams }) {
-  const currentActionUserId = request.headers.get('X-User-ID'); 
+  const currentActionUserId = request.headers.get('X-User-ID');
   if (!currentActionUserId) {
     return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
   }
@@ -40,12 +40,12 @@ export async function DELETE(request: NextRequest, { params }: { params: GroupMe
     if (!isOwner && !isAdmin) {
       return NextResponse.json({ message: 'Only the group owner or an admin can remove members' }, { status: 403 });
     }
-    
+
     // Prevent owner from removing themselves or an admin from removing the owner
     if (memberUid === group.ownerId) {
         return NextResponse.json({ message: 'Group owner cannot be removed from the group. Delete the group instead or transfer ownership (not implemented).' }, { status: 400 });
     }
-    
+
     // Prevent an admin from removing another admin if the remover is not the owner
     if (!isOwner && isAdmin) {
         const memberToRemove = group.members.find(m => m.userId === memberUid);
@@ -68,7 +68,7 @@ export async function DELETE(request: NextRequest, { params }: { params: GroupMe
     if (result.modifiedCount === 0 && result.matchedCount > 0) {
         const updatedGroup = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
         if (!updatedGroup?.members.some(m => m.userId === memberUid)) {
-            return NextResponse.json({ message: 'Member already removed or not found after pull.', members: updatedGroup?.members.map(m => fromMongo(m as any)) || [] }, { status: 200 });
+            return NextResponse.json({ message: 'Member already removed or not found after pull.', members: updatedGroup?.members || [] }, { status: 200 });
         }
         return NextResponse.json({ message: 'Failed to remove member, group was matched but not modified.' }, { status: 500 });
     }
@@ -77,7 +77,7 @@ export async function DELETE(request: NextRequest, { params }: { params: GroupMe
     }
 
     const updatedGroupDoc = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
-    return NextResponse.json({ message: 'Member removed successfully', members: updatedGroupDoc?.members.map(m => fromMongo(m as any)) || [] }, { status: 200 });
+    return NextResponse.json({ message: 'Member removed successfully', members: updatedGroupDoc?.members || [] }, { status: 200 });
 
   } catch (error) {
     console.error('Failed to remove group member:', error);
@@ -87,7 +87,7 @@ export async function DELETE(request: NextRequest, { params }: { params: GroupMe
 
 // PUT /api/groups/[groupId]/members/[memberUid] - Update a member's role
 export async function PUT(request: NextRequest, { params }: { params: GroupMemberManagementParams }) {
-  const currentActionUserId = request.headers.get('X-User-ID'); 
+  const currentActionUserId = request.headers.get('X-User-ID');
   if (!currentActionUserId) {
     return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
   }
@@ -116,11 +116,11 @@ export async function PUT(request: NextRequest, { params }: { params: GroupMembe
     if (!isOwner && !isAdmin) {
       return NextResponse.json({ message: 'Only the group owner or an admin can change member roles' }, { status: 403 });
     }
-    
+
     if (memberUid === group.ownerId && role !== 'admin') {
       return NextResponse.json({ message: 'Group owner must always have the admin role.' }, { status: 400 });
     }
-    
+
     // Prevent an admin from changing another admin's role if the remover is not the owner
     if (!isOwner && isAdmin) {
         const memberToUpdate = group.members.find(m => m.userId === memberUid);
@@ -134,10 +134,10 @@ export async function PUT(request: NextRequest, { params }: { params: GroupMembe
     if (memberIndex === -1) {
       return NextResponse.json({ message: 'Member not found in this group' }, { status: 404 });
     }
-    
+
     if (group.members[memberIndex].role === role) {
         const updatedGroupDoc = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
-        return NextResponse.json({ message: 'Member role is already set to this value.', members: updatedGroupDoc?.members.map(m => fromMongo(m as any)) || [] }, { status: 200 });
+        return NextResponse.json({ message: 'Member role is already set to this value.', members: updatedGroupDoc?.members || [] }, { status: 200 });
     }
 
     const result = await groupsCollection.updateOne(
@@ -149,7 +149,7 @@ export async function PUT(request: NextRequest, { params }: { params: GroupMembe
         const updatedGroupDoc = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
         const currentMember = updatedGroupDoc?.members.find(m => m.userId === memberUid);
         if (currentMember?.role === role) {
-            return NextResponse.json({ message: 'Member role appears to be updated.', members: updatedGroupDoc?.members.map(m => fromMongo(m as any)) || [] }, { status: 200 });
+            return NextResponse.json({ message: 'Member role appears to be updated.', members: updatedGroupDoc?.members || [] }, { status: 200 });
         }
         return NextResponse.json({ message: 'Failed to update member role, matched but not modified.' }, { status: 500 });
     }
@@ -158,7 +158,7 @@ export async function PUT(request: NextRequest, { params }: { params: GroupMembe
     }
 
     const updatedGroupDoc = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
-    return NextResponse.json({ message: 'Member role updated successfully', members: updatedGroupDoc?.members.map(m => fromMongo(m as any)) || [] }, { status: 200 });
+    return NextResponse.json({ message: 'Member role updated successfully', members: updatedGroupDoc?.members || [] }, { status: 200 });
 
   } catch (error) {
     console.error('Failed to update group member role:', error);

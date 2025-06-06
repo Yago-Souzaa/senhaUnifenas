@@ -12,7 +12,7 @@ interface GroupMemberParams {
 
 // POST /api/groups/[groupId]/members - Add a member to a group
 export async function POST(request: NextRequest, { params }: { params: GroupMemberParams }) {
-  const currentActionUserId = request.headers.get('X-User-ID'); 
+  const currentActionUserId = request.headers.get('X-User-ID');
   if (!currentActionUserId) {
     return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
   }
@@ -46,7 +46,7 @@ export async function POST(request: NextRequest, { params }: { params: GroupMemb
     if (group.members.some(member => member.userId === userIdToAdd)) {
       return NextResponse.json({ message: 'User is already a member of this group. Use update if you want to change role.' }, { status: 409 });
     }
-    
+
     if (userIdToAdd === group.ownerId && role !== 'admin') {
       return NextResponse.json({ message: 'Group owner must always have the admin role if being re-added (should not happen).' }, { status: 400 });
     }
@@ -61,13 +61,13 @@ export async function POST(request: NextRequest, { params }: { params: GroupMemb
 
     const result = await groupsCollection.updateOne(
       { _id: new ObjectId(groupId) },
-      { $addToSet: { members: newMember }, $set: { updatedAt: new Date() } } 
+      { $addToSet: { members: newMember }, $set: { updatedAt: new Date() } }
     );
 
     if (result.modifiedCount === 0 && result.matchedCount > 0) {
          const updatedGroup = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
          if (updatedGroup?.members.some(m => m.userId === userIdToAdd)) {
-            return NextResponse.json({ message: 'Member already exists or was just added', members: updatedGroup.members.map(m => fromMongo(m as any)) }, { status: 200 });
+            return NextResponse.json({ message: 'Member already exists or was just added', members: updatedGroup.members || [] }, { status: 200 });
          }
          return NextResponse.json({ message: 'Failed to add member, group was matched but not modified.' }, { status: 500 });
     }
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest, { params }: { params: GroupMemb
     }
 
     const updatedGroupDoc = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
-    return NextResponse.json({ message: 'Member added successfully', members: updatedGroupDoc?.members.map(m => fromMongo(m as any)) || [] }, { status: 200 });
+    return NextResponse.json({ message: 'Member added successfully', members: updatedGroupDoc?.members || [] }, { status: 200 });
 
   } catch (error) {
     console.error('Failed to add group member:', error);
