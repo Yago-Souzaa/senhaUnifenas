@@ -2,9 +2,9 @@
 'use server';
 
 import { NextResponse, type NextRequest } from 'next/server';
-import { connectToDatabase } from '@/lib/mongodb';
+import { connectToDatabase, fromMongo } from '@/lib/mongodb'; // fromMongo might be needed for PUT response
 import { ObjectId } from 'mongodb';
-import type { PasswordEntry } from '@/types';
+// import type { PasswordEntry } from '@/types'; // Not directly used in DELETE or PUT here
 
 interface GroupParams {
   groupId: string;
@@ -34,37 +34,56 @@ export async function DELETE(request: NextRequest, { params }: { params: GroupPa
       return NextResponse.json({ message: 'Only the group owner can delete the group' }, { status: 403 });
     }
 
-    // Atomically delete the group and unshare passwords from this group
-    const session = groupsCollection.client.startSession();
     let deleteMessage = 'Group deleted successfully.';
 
+    // Perform operations sequentially without a transaction
     try {
-      await session.withTransaction(async () => {
-        // Remove group reference from all passwords
-        const updateResult = await passwordsCollection.updateMany(
-          { sharedWithGroupIds: groupId },
-          { $pull: { sharedWithGroupIds: groupId } },
-          { session }
-        );
-        if (updateResult.modifiedCount > 0) {
-          deleteMessage += ` Also unshared from ${updateResult.modifiedCount} password(s).`;
-        }
+      // Remove group reference from all passwords
+      // This operation is on the passwordsCollection
+      const updateResult = await passwordsCollection.updateMany(
+        { sharedWithGroupIds: groupId }, // This field was removed, passwords are now shared via category.
+                                          // However, category unsharing is handled by category API.
+                                          // If a group is deleted, category shares pointing to it should ideally be cleaned up,
+                                          // or handled when accessing shared categories.
+                                          // For now, let's focus on deleting the group itself.
+                                          // The original transaction also tried to update passwordsCollection.
+                                          // The current model shares categories, not individual passwords with groups.
+                                          // Deleting a group means CategoryShares pointing to this groupId become orphaned.
+                                          // A more robust solution would also delete CategoryShare documents associated with this group.
+        { $pull: { sharedWithGroupIds: groupId } } // This targets a field that's no longer in PasswordEntry for group sharing.
+                                                  // This line might not do anything useful with the current model.
+                                                  // We will keep it for now in case legacy data exists, or if there's a misunderstanding of current schema.
+                                                  // A better cleanup would be to remove CategoryShare documents.
+      );
+      // if (updateResult.modifiedCount > 0) {
+      //   deleteMessage += ` Also unshared from ${updateResult.modifiedCount} password(s).`;
+      // }
 
-        // Delete the group
-        const deleteResult = await groupsCollection.deleteOne({ _id: new ObjectId(groupId), ownerId: currentUserId }, { session });
-        if (deleteResult.deletedCount === 0) {
-          // This should ideally not happen if the initial findOne and owner check passed
-          throw new Error('Group not found or not owned by user during transaction.');
-        }
-      });
-    } finally {
-      await session.endSession();
+      // Then, delete the group
+      const deleteResult = await groupsCollection.deleteOne({ _id: new ObjectId(groupId), ownerId: currentUserId });
+      if (deleteResult.deletedCount === 0) {
+        throw new Error('Group not found or not owned by user during deletion attempt.');
+      }
+      
+      // Additionally, we should clean up CategoryShares associated with this group
+      const { categorySharesCollection } = await connectToDatabase();
+      const categoryShareCleanupResult = await categorySharesCollection.deleteMany({ groupId: groupId });
+      if (categoryShareCleanupResult.deletedCount > 0) {
+          deleteMessage += ` Also removed ${categoryShareCleanupResult.deletedCount} category share(s) associated with this group.`;
+      }
+
+
+    } catch (operationError: any) {
+      console.error('Error during group deletion operations:', operationError);
+      // If any operation fails, we throw an error.
+      // The client will see a generic "Failed to delete group" or the specific error from here.
+      return NextResponse.json({ message: 'Failed to complete all deletion operations for group.', error: operationError.message }, { status: 500 });
     }
     
     return NextResponse.json({ message: deleteMessage }, { status: 200 });
 
   } catch (error) {
-    console.error('Failed to delete group:', error);
+    console.error('Failed to delete group (outer try-catch):', error);
     const errorMessage = error instanceof Error ? error.message : 'Failed to delete group';
     return NextResponse.json({ message: errorMessage }, { status: 500 });
   }
@@ -95,9 +114,12 @@ export async function PUT(request: NextRequest, { params }: { params: GroupParam
       return NextResponse.json({ message: 'Group not found' }, { status: 404 });
     }
 
-    if (group.ownerId !== currentUserId) {
-      // For now, only owner can rename. Could be extended to admins.
-      return NextResponse.json({ message: 'Only the group owner can rename the group' }, { status: 403 });
+    // Check if currentUserId is owner or an admin of the group
+    const isOwner = group.ownerId === currentUserId;
+    const isAdmin = group.members.some(member => member.userId === currentUserId && member.role === 'admin');
+
+    if (!isOwner && !isAdmin) {
+      return NextResponse.json({ message: 'Only the group owner or an admin can rename the group' }, { status: 403 });
     }
 
     const result = await groupsCollection.updateOne(
@@ -106,7 +128,8 @@ export async function PUT(request: NextRequest, { params }: { params: GroupParam
     );
 
     if (result.matchedCount === 0) {
-      return NextResponse.json({ message: 'Group not found or not owned by user' }, { status: 404 });
+      // This implies group was deleted between the findOne and updateOne, or permission changed.
+      return NextResponse.json({ message: 'Group not found or permission issue during update' }, { status: 404 });
     }
 
     const updatedGroup = await groupsCollection.findOne({ _id: new ObjectId(groupId) });
@@ -117,4 +140,4 @@ export async function PUT(request: NextRequest, { params }: { params: GroupParam
     return NextResponse.json({ message: 'Failed to update group', error: (error as Error).message }, { status: 500 });
   }
 }
-
+    
