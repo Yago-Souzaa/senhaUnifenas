@@ -453,6 +453,9 @@ export default function HomePage() {
                   <GoogleIcon />
                   Entrar com Google
                 </Button>
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                  Domínios permitidos: {ALLOWED_GOOGLE_DOMAINS.join(', ')}.
+                </p>
               </CardContent>
             </Card>
           </div>
