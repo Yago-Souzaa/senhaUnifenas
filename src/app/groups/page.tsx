@@ -192,10 +192,8 @@ export default function GroupsPage() {
         if (updatedGroupFromHook) {
           setEditingGroup(updatedGroupFromHook);
         } else {
-          // Fallback if hook doesn't return group (e.g. group deleted by another action)
-          // This case should be less common now that removeGroupMember returns the updated group.
           setIsManageMembersDialogOpen(false); 
-          await fetchGroups(); // Re-fetch all groups as a safeguard
+          await fetchGroups(); 
         }
     } catch (e: any) {
         toast({ title: "Erro ao Remover Membro", description: e.message || "Não foi possível remover o membro.", variant: "destructive" });
@@ -265,7 +263,7 @@ export default function GroupsPage() {
             <h2 className="text-3xl font-headline text-primary flex items-center gap-2">
                 <Users size={30}/> Meus Grupos
             </h2>
-            <Button onClick={() => { setNewGroupName(''); setIsCreateGroupDialogOpen(true); }} className="bg-accent hover:bg-accent/90 text-accent-foreground">
+            <Button onClick={() => { setNewGroupName(''); setIsCreateGroupDialogOpen(true); }}>
                 <PlusCircle size={18} className="mr-2" /> Criar Novo Grupo
             </Button>
         </div>
@@ -529,6 +527,3 @@ export default function GroupsPage() {
     </div>
   );
 }
-
-
-    
