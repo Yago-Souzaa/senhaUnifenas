@@ -10,8 +10,7 @@ import { AddEditPasswordDialog, type PasswordFormValues } from '@/components/pas
 import { ImportPasswordsDialog } from '@/components/password/ImportPasswordsDialog';
 import { PasswordGeneratorDialog } from '@/components/password/PasswordGeneratorDialog';
 import { ClearAllPasswordsDialog } from '@/components/password/ClearAllPasswordsDialog';
-// SharePasswordDialog import removed
-import { ShareCategoryDialog } from '@/components/category/ShareCategoryDialog'; // New import
+import { ShareCategoryDialog } from '@/components/category/ShareCategoryDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -69,8 +68,8 @@ export default function HomePage() {
 
   const {
     passwords,
-    groups, 
-    isLoading: passwordsLoading,
+    groups,
+    isLoading: passwordsLoadingFromHook, // Renamed to avoid conflict with local loading
     error: passwordManagerError,
     addPassword,
     updatePassword,
@@ -79,8 +78,8 @@ export default function HomePage() {
     generatePassword,
     clearAllPasswords,
     exportPasswordsToCSV,
-    fetchGroups, 
-    shareCategoryWithGroup,
+    fetchGroups,
+    shareCategoryWithGroup, // Destructuring the correct function
     unshareCategoryFromGroup,
     fetchCategorySharesForOwner,
   } = usePasswordManager(firebaseUser?.uid);
@@ -103,6 +102,8 @@ export default function HomePage() {
   const [isShareCategoryDialogOpen, setIsShareCategoryDialogOpen] = useState(false);
   const [categoryToShare, setCategoryToShare] = useState<string | null>(null);
 
+  // Combined loading state
+  const isLoading = authLoading || passwordsLoadingFromHook;
 
   useEffect(() => {
     setCurrentYear(new Date().getFullYear());
@@ -115,20 +116,20 @@ export default function HomePage() {
       if (user) {
         setAuthError(null);
         const storedCategories = localStorage.getItem(`userCategories_${user.uid}`);
-        if (storedCategories) {
-          setUserCategories(JSON.parse(storedCategories));
-        } else {
-          setUserCategories([]);
-        }
+        setUserCategories(storedCategories ? JSON.parse(storedCategories) : []);
         setActiveTab('Todas');
-        fetchGroups(); 
+        fetchGroups().catch(err => {
+            // This error is already logged in the hook, toast a simpler message here if needed
+            // For now, rely on global error display or specific component errors
+            console.warn("HomePage: fetchGroups failed on auth state change:", err.message);
+        });
       } else {
         setUserCategories([]);
         setActiveTab('Todas');
       }
     });
     return () => unsubscribe();
-  }, [fetchGroups]);
+  }, [fetchGroups]); // fetchGroups from hook has currentUserId in its own dependency
 
   useEffect(() => {
     if (firebaseUser && passwords.length > 0) {
@@ -136,20 +137,21 @@ export default function HomePage() {
         new Set(
           passwords
             .filter(p => p.ownerId === firebaseUser.uid && p.categoria)
-            .map(p => p.categoria!) 
+            .map(p => p.categoria!)
         )
       );
-      const currentCategories = JSON.parse(localStorage.getItem(`userCategories_${firebaseUser.uid}`) || '[]');
-      const combinedCategories = Array.from(new Set([...currentCategories, ...categoriesFromOwnedPasswords]
+      const currentStoredCategories = JSON.parse(localStorage.getItem(`userCategories_${firebaseUser.uid}`) || '[]');
+      const combinedCategories = Array.from(new Set([...currentStoredCategories, ...categoriesFromOwnedPasswords]
         .map(cat => cat.trim())
         .filter(cat => cat.length > 0)
         .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
       ));
+
       if (JSON.stringify(combinedCategories) !== JSON.stringify(userCategories)) {
          setUserCategories(combinedCategories);
          localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(combinedCategories));
       }
-    } else if (firebaseUser && passwords.length === 0) { 
+    } else if (firebaseUser && passwords.length === 0) {
         const storedCategories = localStorage.getItem(`userCategories_${firebaseUser.uid}`);
         const loadedCategories = storedCategories ? JSON.parse(storedCategories) : [];
         if (JSON.stringify(loadedCategories) !== JSON.stringify(userCategories)) {
@@ -157,7 +159,7 @@ export default function HomePage() {
         }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [passwords, firebaseUser]);
+  }, [passwords, firebaseUser]); // userCategories removed to prevent loop
 
 
   const handleFirebaseError = (error: AuthError) => {
@@ -333,7 +335,7 @@ export default function HomePage() {
       toast({ title: "Não autenticado", description: "Você precisa estar logado para exportar senhas.", variant: "destructive" });
       return;
     }
-    if (passwords.length === 0) {
+    if (passwords.length === 0 && activeTab === 'Todas') { // Only show if no passwords at all
       toast({ title: "Nada para Exportar", description: "Não há senhas para exportar.", variant: "default" });
       return;
     }
@@ -353,6 +355,11 @@ export default function HomePage() {
   };
 
   const handleOpenShareCategoryDialog = (categoryName: string) => {
+    if (typeof shareCategoryWithGroup !== 'function') {
+      console.error('HomePage: shareCategoryWithGroup is not a function before opening dialog!', shareCategoryWithGroup);
+      toast({title: "Erro de Interface", description: "Não é possível abrir o diálogo de compartilhamento no momento.", variant: "destructive"});
+      return;
+    }
     setCategoryToShare(categoryName);
     setIsShareCategoryDialogOpen(true);
   };
@@ -381,26 +388,26 @@ export default function HomePage() {
   const handleConfirmDeleteCategory = useCallback(async () => {
     if (!firebaseUser || !categoryToDelete) return;
 
-    const passwordsInCategory = passwords.filter(p => p.ownerId === firebaseUser.uid && p.categoria?.toLowerCase() === categoryToDelete.toLowerCase());
-    
+    const passwordsInCategory = passwords.filter(p => p.ownerId === firebaseUser.uid && p.categoria?.toLowerCase() === categoryToDelete.toLowerCase() && !p.isDeleted);
+
     if (passwordsInCategory.length > 0) {
       toast({
         title: "Exclusão Falhou",
         description: `A categoria "${categoryToDelete}" não pode ser excluída pois contém ${passwordsInCategory.length} senha(s) sua(s). Mova ou delete estas senhas primeiro.`,
-        variant: "destructive",
+        variant: "destructive", duration: 5000
       });
       setIsDeleteCategoryDialogOpen(false);
       setCategoryToDelete(null);
       return;
     }
-    
+
     try {
         const shares = await fetchCategorySharesForOwner(categoryToDelete, firebaseUser.uid);
         if (shares && shares.length > 0) {
             toast({
               title: "Exclusão Falhou",
               description: `A categoria "${categoryToDelete}" está compartilhada com ${shares.length} grupo(s). Remova esses compartilhamentos primeiro.`,
-              variant: "destructive",
+              variant: "destructive", duration: 5000
             });
             setIsDeleteCategoryDialogOpen(false);
             setCategoryToDelete(null);
@@ -413,42 +420,40 @@ export default function HomePage() {
         return;
     }
 
-
     const updatedCategories = userCategories.filter(cat => cat.toLowerCase() !== categoryToDelete.toLowerCase());
     setUserCategories(updatedCategories);
     localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(updatedCategories));
     setActiveTab('Todas');
     toast({ title: "Categoria Excluída", description: `A categoria "${categoryToDelete}" foi excluída.` });
-    
+
     setIsDeleteCategoryDialogOpen(false);
     setCategoryToDelete(null);
-  }, [firebaseUser, categoryToDelete, passwords, userCategories, toast, setActiveTab, fetchCategorySharesForOwner]);
+  }, [firebaseUser, categoryToDelete, passwords, userCategories, toast, fetchCategorySharesForOwner]);
 
 
   const filteredPasswords = useMemo(() => {
-    let tempPasswords = passwords.filter(p => !p.isDeleted); 
+    let tempPasswords = passwords.filter(p => !p.isDeleted);
     if (activeTab !== 'Todas') {
       tempPasswords = tempPasswords.filter(p => p.categoria?.toLowerCase() === activeTab.toLowerCase());
     }
     if (searchTerm) {
-      tempPasswords = tempPasswords.filter(p => {
-        const lowerSearchTerm = searchTerm.toLowerCase();
-        return (
-            p.nome.toLowerCase().includes(lowerSearchTerm) ||
-            p.login.toLowerCase().includes(lowerSearchTerm) ||
-            (p.categoria && p.categoria.toLowerCase().includes(lowerSearchTerm)) ||
-            (p.customFields && p.customFields.some(cf => 
-                cf.label.toLowerCase().includes(lowerSearchTerm) || 
-                cf.value.toLowerCase().includes(lowerSearchTerm)
-            ))
-        );
-      });
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      tempPasswords = tempPasswords.filter(p =>
+        p.nome.toLowerCase().includes(lowerSearchTerm) ||
+        p.login.toLowerCase().includes(lowerSearchTerm) ||
+        (p.categoria && p.categoria.toLowerCase().includes(lowerSearchTerm)) ||
+        (p.customFields && p.customFields.some(cf =>
+            cf.label.toLowerCase().includes(lowerSearchTerm) ||
+            cf.value.toLowerCase().includes(lowerSearchTerm)
+        )) ||
+        (p.sharedVia?.groupName && p.sharedVia.groupName.toLowerCase().includes(lowerSearchTerm))
+      );
     }
     return tempPasswords;
   }, [passwords, activeTab, searchTerm]);
 
 
-  if (authLoading) {
+  if (authLoading) { // Only initial auth loading
     return (
       <div className="min-h-screen flex flex-col items-center justify-center">
         <KeyRound size={48} className="text-primary animate-pulse mb-4" />
@@ -484,7 +489,7 @@ export default function HomePage() {
           </div>
         ) : (
           <>
-            {passwordManagerError && (
+            {passwordManagerError && ( // This is the global error from the hook (e.g., failed initial password load)
              <Alert variant="destructive" className="mb-4">
                 <ShieldAlert className="h-5 w-5" />
                 <AlertTitle>Erro de Conexão ou Dados</AlertTitle>
@@ -553,7 +558,7 @@ export default function HomePage() {
                            <FolderKanban size={14} /> Todas
                         </Button>
                         {userCategories.map(category => {
-                           const isOwnedCategory = true; 
+                           const isOwnedCategory = true; // Simplified: categories in userCategories are considered "owned" for UI purposes
                            const isCategoryEmptyForDeletion = !passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.toLowerCase() === category.toLowerCase() && !p.isDeleted);
 
                            return (
@@ -562,12 +567,12 @@ export default function HomePage() {
                                  variant={activeTab === category ? "secondary" : "ghost"}
                                  size="sm"
                                  onClick={() => setActiveTab(category)}
-                                 className="flex items-center gap-1.5 h-8 px-3 rounded-md pr-2" 
+                                 className="flex items-center gap-1.5 h-8 px-3 rounded-md pr-2"
                               >
                                  <FolderKanban size={14} />
                                  {category}
                               </Button>
-                              {isOwnedCategory && (
+                              {isOwnedCategory && ( // Only show share for "owned" categories
                                 <Button
                                     asChild
                                     variant="ghost"
@@ -584,19 +589,19 @@ export default function HomePage() {
                               )}
                               {isOwnedCategory && isCategoryEmptyForDeletion && (
                                  <Button
-                                    asChild 
+                                    asChild
                                     variant="ghost"
                                     size="icon"
                                     className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-destructive/20 ml-0.5"
                                  >
                                     <div
                                        role="button"
-                                       tabIndex={0} 
+                                       tabIndex={0}
                                        onClick={(e) => {
                                        e.stopPropagation(); e.preventDefault();
                                        setCategoryToDelete(category); setIsDeleteCategoryDialogOpen(true);
                                        }}
-                                       onKeyDown={(e) => { 
+                                       onKeyDown={(e) => {
                                        if (e.key === 'Enter' || e.key === ' ') {
                                           e.stopPropagation(); e.preventDefault();
                                           setCategoryToDelete(category); setIsDeleteCategoryDialogOpen(true);
@@ -639,16 +644,16 @@ export default function HomePage() {
                      </AlertDialogContent>
                   </AlertDialog>
                </div>
-               <div className="mt-4"> 
+               <div className="mt-4">
                   <PasswordList
                      passwords={filteredPasswords}
-                     isLoading={passwordsLoading}
+                     isLoading={isLoading} // Use combined loading state
                      onEdit={handleEditPassword}
                      onDelete={handleDeletePassword}
                      searchTerm={searchTerm}
                      activeTab={activeTab}
                      currentUserId={firebaseUser.uid}
-                     userGroups={groups} 
+                     userGroups={groups}
                   />
                </div>
             </div>
@@ -681,7 +686,7 @@ export default function HomePage() {
         onOpenChange={setIsClearAllDialogOpen}
         onConfirm={handleClearAllPasswords}
       />
-      {isShareCategoryDialogOpen && categoryToShare && firebaseUser && (
+      {isShareCategoryDialogOpen && categoryToShare && firebaseUser && typeof shareCategoryWithGroup === 'function' && typeof unshareCategoryFromGroup === 'function' && typeof fetchCategorySharesForOwner === 'function' && (
         <ShareCategoryDialog
             isOpen={isShareCategoryDialogOpen}
             onOpenChange={(open) => {
@@ -689,11 +694,11 @@ export default function HomePage() {
                 if (!open) setCategoryToShare(null);
             }}
             categoryName={categoryToShare}
-            ownerId={firebaseUser.uid} 
+            ownerId={firebaseUser.uid}
             userGroups={groups}
             onShareCategoryWithGroup={shareCategoryWithGroup}
             onUnshareCategoryFromGroup={unshareCategoryFromGroup}
-            fetchCategorySharesForOwner={fetchCategorySharesForOwner} // Corrected prop name passed
+            fetchCategorySharesForOwner={fetchCategorySharesForOwner}
         />
       )}
        <AlertDialog open={isDeleteCategoryDialogOpen} onOpenChange={setIsDeleteCategoryDialogOpen}>

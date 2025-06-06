@@ -23,18 +23,18 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, ListChecks, Share2, ShieldCheck, Trash2 } from 'lucide-react';
+import { AlertCircle, ListChecks, Share2, ShieldCheck, Trash2, Loader2 } from 'lucide-react'; // Added Loader2
 import { Separator } from '../ui/separator';
 
 interface ShareCategoryDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   categoryName: string;
-  ownerId: string; // UID of the user who owns the category
+  ownerId: string;
   userGroups: Group[];
   onShareCategoryWithGroup: (categoryName: string, groupId: string) => Promise<CategoryShare | undefined>;
   onUnshareCategoryFromGroup: (categoryName: string, groupId: string) => Promise<void>;
-  fetchCategorySharesForOwner: (categoryName: string, ownerId: string) => Promise<CategoryShare[]>; // Corrected prop name
+  fetchCategorySharesForOwner: (categoryName: string, ownerId: string) => Promise<CategoryShare[]>;
 }
 
 export function ShareCategoryDialog({
@@ -45,7 +45,7 @@ export function ShareCategoryDialog({
   userGroups,
   onShareCategoryWithGroup,
   onUnshareCategoryFromGroup,
-  fetchCategorySharesForOwner, // Corrected prop name
+  fetchCategorySharesForOwner,
 }: ShareCategoryDialogProps) {
   const [selectedGroupId, setSelectedGroupId] = useState<string>('');
   const [sharedWithGroups, setSharedWithGroups] = useState<CategoryShare[]>([]);
@@ -54,10 +54,14 @@ export function ShareCategoryDialog({
   const { toast } = useToast();
 
   const loadShares = useCallback(async () => {
-    if (!isOpen || !categoryName || !ownerId) return;
+    if (!isOpen || !categoryName || !ownerId || typeof fetchCategorySharesForOwner !== 'function') {
+        // If dialog not open or essential props missing, do nothing or clear shares
+        if (!isOpen) setSharedWithGroups([]);
+        return;
+    }
     setIsLoadingShares(true);
     try {
-      const shares = await fetchCategorySharesForOwner(categoryName, ownerId); // Use corrected prop name
+      const shares = await fetchCategorySharesForOwner(categoryName, ownerId);
       setSharedWithGroups(shares);
     } catch (error: any) {
       toast({ title: "Erro ao Carregar Compartilhamentos", description: error.message || "Não foi possível buscar os compartilhamentos da categoria.", variant: "destructive" });
@@ -65,11 +69,19 @@ export function ShareCategoryDialog({
     } finally {
       setIsLoadingShares(false);
     }
-  }, [isOpen, categoryName, ownerId, fetchCategorySharesForOwner, toast]); // Add corrected prop to dependency array
+  }, [isOpen, categoryName, ownerId, fetchCategorySharesForOwner, toast]);
 
   useEffect(() => {
-    loadShares();
-  }, [loadShares]);
+    if (isOpen) { // Only load shares when the dialog is opened
+        loadShares();
+    } else {
+        // Reset state when dialog is closed
+        setSelectedGroupId('');
+        setSharedWithGroups([]);
+        setIsLoadingShares(false);
+        setIsSubmitting(false);
+    }
+  }, [isOpen, loadShares]);
 
 
   const handleShare = async () => {
@@ -77,16 +89,18 @@ export function ShareCategoryDialog({
       toast({ title: "Nenhum Grupo Selecionado", description: "Por favor, selecione um grupo.", variant: "destructive" });
       return;
     }
+    if (typeof onShareCategoryWithGroup !== 'function') {
+      console.error("ShareCategoryDialog: onShareCategoryWithGroup is not a function. Value:", onShareCategoryWithGroup);
+      toast({ title: "Erro Interno", description: "Ação de compartilhar não está disponível.", variant: "destructive" });
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      if (typeof onShareCategoryWithGroup !== 'function') {
-        console.error("onShareCategoryWithGroup is not a function inside handleShare. Value:", onShareCategoryWithGroup);
-        throw new Error("Falha interna: Função de compartilhamento não disponível.");
-      }
       const newShare = await onShareCategoryWithGroup(categoryName, selectedGroupId);
       if (newShare) {
         toast({ title: "Sucesso!", description: `Categoria "${categoryName}" compartilhada com o grupo.` });
-        setSelectedGroupId('');
+        setSelectedGroupId(''); // Reset selected group for next share
         await loadShares(); // Refresh the list of shares
       }
     } catch (error: any) {
@@ -97,12 +111,13 @@ export function ShareCategoryDialog({
   };
 
   const handleUnshare = async (groupIdToUnshare: string) => {
+    if (typeof onUnshareCategoryFromGroup !== 'function') {
+      console.error("ShareCategoryDialog: onUnshareCategoryFromGroup is not a function. Value:", onUnshareCategoryFromGroup);
+      toast({ title: "Erro Interno", description: "Ação de remover compartilhamento não está disponível.", variant: "destructive" });
+      return;
+    }
     setIsSubmitting(true);
     try {
-      if (typeof onUnshareCategoryFromGroup !== 'function') {
-        console.error("onUnshareCategoryFromGroup is not a function inside handleUnshare. Value:", onUnshareCategoryFromGroup);
-        throw new Error("Falha interna: Função de remover compartilhamento não disponível.");
-      }
       await onUnshareCategoryFromGroup(categoryName, groupIdToUnshare);
       toast({ title: "Sucesso!", description: `Compartilhamento da categoria "${categoryName}" removido do grupo.` });
       await loadShares(); // Refresh the list of shares
@@ -119,14 +134,14 @@ export function ShareCategoryDialog({
 
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!isSubmitting) onOpenChange(open); }}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!isSubmitting && !isLoadingShares) onOpenChange(open); }}>
       <DialogContent className="sm:max-w-lg md:max-w-xl bg-card max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="font-headline text-primary flex items-center gap-2">
             <Share2 size={22} /> Compartilhar Categoria
           </DialogTitle>
           <DialogDescription>
-            Compartilhe a categoria <span className="font-semibold">"{categoryName}"</span> (e todas as senhas dentro dela) com seus grupos.
+            Compartilhe a categoria <span className="font-semibold">"{categoryName}"</span> (e todas as senhas dentro dela que você possui) com seus grupos.
             Apenas você, como proprietário da categoria, pode iniciar ou remover compartilhamentos.
           </DialogDescription>
         </DialogHeader>
@@ -138,7 +153,12 @@ export function ShareCategoryDialog({
               <h3 className="text-md font-semibold text-foreground flex items-center gap-2">
                 <ShieldCheck size={18} /> Compartilhar com um Novo Grupo
               </h3>
-              {availableGroupsToShareWith.length > 0 ? (
+              {isLoadingShares ? (
+                 <div className="flex items-center justify-center p-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <span className="ml-2 text-muted-foreground text-xs">Carregando dados...</span>
+                 </div>
+              ) : availableGroupsToShareWith.length > 0 ? (
                 <>
                   <div>
                     <Select value={selectedGroupId} onValueChange={setSelectedGroupId} disabled={isSubmitting || isLoadingShares}>
@@ -155,6 +175,7 @@ export function ShareCategoryDialog({
                     </Select>
                   </div>
                   <Button onClick={handleShare} className="w-full bg-accent hover:bg-accent/90 text-accent-foreground" disabled={isSubmitting || isLoadingShares || !selectedGroupId}>
+                    {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     {isSubmitting ? "Compartilhando..." : "Compartilhar com Grupo Selecionado"}
                   </Button>
                 </>
@@ -173,7 +194,10 @@ export function ShareCategoryDialog({
                 <ListChecks size={18} /> Compartilhado Atualmente Com:
               </h3>
               {isLoadingShares ? (
-                <p className="text-xs text-muted-foreground">Carregando compartilhamentos...</p>
+                 <div className="flex items-center justify-center p-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                    <span className="ml-2 text-muted-foreground text-xs">Carregando compartilhamentos...</span>
+                 </div>
               ) : !sharedWithGroups || sharedWithGroups.length === 0 ? (
                 <p className="text-xs text-muted-foreground p-3 bg-muted/20 rounded-md flex items-center gap-2">
                   <AlertCircle size={16} /> Esta categoria ainda não foi compartilhada com nenhum grupo.
@@ -200,7 +224,7 @@ export function ShareCategoryDialog({
                             disabled={isSubmitting || isLoadingShares}
                             aria-label={`Remover compartilhamento com grupo ${group?.name || share.groupId}`}
                           >
-                            <Trash2 size={16} />
+                            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 size={16} />}
                           </Button>
                         </div>
                       </li>
@@ -213,7 +237,7 @@ export function ShareCategoryDialog({
         </ScrollArea>
         <DialogFooter className="border-t pt-4">
             <DialogClose asChild>
-                <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>Fechar</Button>
+                <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting || isLoadingShares}>Fechar</Button>
             </DialogClose>
         </DialogFooter>
       </DialogContent>
