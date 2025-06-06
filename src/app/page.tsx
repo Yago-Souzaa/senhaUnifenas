@@ -446,9 +446,6 @@ export default function HomePage() {
                    <KeyRound size={24}/> Entrar
                 </CardTitle>
                 <CardDescription>Use sua conta Google dos domínios permitidos para acessar.</CardDescription>
-                <p className="text-xs text-muted-foreground pt-1">
-                  Domínios permitidos: {ALLOWED_GOOGLE_DOMAINS.join(', ')}.
-                </p>
               </CardHeader>
               <CardContent className="px-6 pb-6 pt-2">
                 {authError && <p className="text-sm text-destructive text-center mb-4">{authError}</p>}
