@@ -620,7 +620,7 @@ export default function HomePage() {
                   </ScrollArea>
                   <AlertDialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
                      <AlertDialogTrigger asChild>
-                        <Button variant="ghost" size="icon" className="ml-2 shrink-0" onClick={() => setIsAddCategoryDialogOpen(true)}>
+                        <Button variant="ghost" size="icon" className="ml-2 shrink-0 hover:bg-secondary hover:text-secondary-foreground" onClick={() => setIsAddCategoryDialogOpen(true)}>
                            <Plus size={20} />
                            <span className="sr-only">Adicionar Nova Categoria</span>
                         </Button>
