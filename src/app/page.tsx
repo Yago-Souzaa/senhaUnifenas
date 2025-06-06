@@ -3,14 +3,14 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { usePasswordManager } from '@/hooks/usePasswordManager';
-import type { PasswordEntry, FirebaseUser, Group } from '@/types';
+import type { PasswordEntry, FirebaseUser, Group, CategoryShare } from '@/types';
 import { Header } from '@/components/layout/Header';
 import { PasswordList } from '@/components/password/PasswordList';
 import { AddEditPasswordDialog, type PasswordFormValues } from '@/components/password/AddEditPasswordDialog';
 import { ImportPasswordsDialog } from '@/components/password/ImportPasswordsDialog';
 import { PasswordGeneratorDialog } from '@/components/password/PasswordGeneratorDialog';
 import { ClearAllPasswordsDialog } from '@/components/password/ClearAllPasswordsDialog';
-import { SharePasswordDialog } from '@/components/password/SharePasswordDialog';
+import { ShareCategoryDialog } from '@/components/category/ShareCategoryDialog'; // New import
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -78,12 +78,10 @@ export default function HomePage() {
     generatePassword,
     clearAllPasswords,
     exportPasswordsToCSV,
-    // sharePassword, // Removed
-    // updateSharePermission, // Removed
-    // removeShare, // Removed
     fetchGroups, 
-    sharePasswordWithGroup,
-    unsharePasswordFromGroup,
+    shareCategoryWithGroup,
+    unshareCategoryFromGroup,
+    fetchCategorySharesForOwner,
   } = usePasswordManager(firebaseUser?.uid);
   const { toast } = useToast();
 
@@ -101,8 +99,8 @@ export default function HomePage() {
   const [isDeleteCategoryDialogOpen, setIsDeleteCategoryDialogOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
 
-  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
-  const [passwordToShare, setPasswordToShare] = useState<PasswordEntry | null>(null);
+  const [isShareCategoryDialogOpen, setIsShareCategoryDialogOpen] = useState(false);
+  const [categoryToShare, setCategoryToShare] = useState<string | null>(null);
 
 
   useEffect(() => {
@@ -122,19 +120,26 @@ export default function HomePage() {
           setUserCategories([]);
         }
         setActiveTab('Todas');
+        fetchGroups(); 
       } else {
         setUserCategories([]);
         setActiveTab('Todas');
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [fetchGroups]);
 
   useEffect(() => {
     if (firebaseUser && passwords.length > 0) {
-      const categoriesFromPasswords = Array.from(new Set(passwords.map(p => p.categoria).filter(Boolean) as string[]));
+      const categoriesFromOwnedPasswords = Array.from(
+        new Set(
+          passwords
+            .filter(p => p.ownerId === firebaseUser.uid && p.categoria)
+            .map(p => p.categoria!) 
+        )
+      );
       const currentCategories = JSON.parse(localStorage.getItem(`userCategories_${firebaseUser.uid}`) || '[]');
-      const combinedCategories = Array.from(new Set([...currentCategories, ...categoriesFromPasswords]
+      const combinedCategories = Array.from(new Set([...currentCategories, ...categoriesFromOwnedPasswords]
         .map(cat => cat.trim())
         .filter(cat => cat.length > 0)
         .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
@@ -143,22 +148,15 @@ export default function HomePage() {
          setUserCategories(combinedCategories);
          localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(combinedCategories));
       }
+    } else if (firebaseUser && passwords.length === 0) { 
+        const storedCategories = localStorage.getItem(`userCategories_${firebaseUser.uid}`);
+        const loadedCategories = storedCategories ? JSON.parse(storedCategories) : [];
+        if (JSON.stringify(loadedCategories) !== JSON.stringify(userCategories)) {
+            setUserCategories(loadedCategories);
+        }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [passwords, firebaseUser]);
-
-  useEffect(() => {
-    if (passwordToShare && passwords && passwords.length > 0) {
-      const updatedVersionInList = passwords.find(p => p.id === passwordToShare.id);
-      if (updatedVersionInList && JSON.stringify(updatedVersionInList) !== JSON.stringify(passwordToShare)) {
-        setPasswordToShare(updatedVersionInList);
-      } else if (!updatedVersionInList && isShareDialogOpen) { 
-        setPasswordToShare(null);
-        setIsShareDialogOpen(false);
-        toast({ title: "Senha não encontrada", description: "A senha que você estava gerenciando não foi encontrada. Pode ter sido excluída.", variant: "destructive" });
-      }
-    }
-  }, [passwords, passwordToShare, isShareDialogOpen, toast]);
 
 
   const handleFirebaseError = (error: AuthError) => {
@@ -226,7 +224,7 @@ export default function HomePage() {
       toast({ title: "Não autenticado", description: "Você precisa estar logado para adicionar senhas.", variant: "destructive" });
       return;
     }
-    const entryToAdd: Omit<PasswordEntry, 'id' | 'userId' | 'ownerId' | 'sharedWith' | 'sharedWithGroupIds' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt'> = {
+    const entryToAdd: Omit<PasswordEntry, 'id' | 'userId' | 'ownerId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt' | 'sharedVia'> = {
       nome: data.nome,
       login: data.login,
       senha: data.senha,
@@ -246,7 +244,7 @@ export default function HomePage() {
       toast({ title: "Não autenticado", description: "Você precisa estar logado para atualizar senhas.", variant: "destructive" });
       return;
     }
-    const entryToUpdate: Omit<PasswordEntry, 'userId' | 'ownerId' | 'sharedWith' | 'sharedWithGroupIds' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt'> & {id: string} = {
+    const entryToUpdate: Omit<PasswordEntry, 'userId' | 'ownerId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt' | 'sharedVia'> & {id: string} = {
       id,
       nome: data.nome,
       login: data.login,
@@ -353,10 +351,11 @@ export default function HomePage() {
     setIsAddEditDialogOpen(true);
   };
 
-  const handleOpenShareDialog = (entry: PasswordEntry) => {
-    setPasswordToShare(entry);
-    setIsShareDialogOpen(true);
+  const handleOpenShareCategoryDialog = (categoryName: string) => {
+    setCategoryToShare(categoryName);
+    setIsShareCategoryDialogOpen(true);
   };
+
 
   const handleAddCategory = useCallback(() => {
     if (!firebaseUser) return false;
@@ -378,25 +377,51 @@ export default function HomePage() {
     return true;
   }, [newCategoryName, userCategories, firebaseUser, toast]);
 
-  const handleConfirmDeleteCategory = useCallback(() => {
+  const handleConfirmDeleteCategory = useCallback(async () => {
     if (!firebaseUser || !categoryToDelete) return;
-    const isCategoryEmpty = !passwords.some(p => p.categoria?.toLowerCase() === categoryToDelete.toLowerCase());
-    if (isCategoryEmpty) {
-      const updatedCategories = userCategories.filter(cat => cat.toLowerCase() !== categoryToDelete.toLowerCase());
-      setUserCategories(updatedCategories);
-      localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(updatedCategories));
-      setActiveTab('Todas');
-      toast({ title: "Categoria Excluída", description: `A categoria "${categoryToDelete}" foi excluída.` });
-    } else {
+
+    const passwordsInCategory = passwords.filter(p => p.ownerId === firebaseUser.uid && p.categoria?.toLowerCase() === categoryToDelete.toLowerCase());
+    
+    if (passwordsInCategory.length > 0) {
       toast({
         title: "Exclusão Falhou",
-        description: `A categoria "${categoryToDelete}" não pode ser excluída pois contém senhas.`,
+        description: `A categoria "${categoryToDelete}" não pode ser excluída pois contém ${passwordsInCategory.length} senha(s) sua(s). Mova ou delete estas senhas primeiro.`,
         variant: "destructive",
       });
+      setIsDeleteCategoryDialogOpen(false);
+      setCategoryToDelete(null);
+      return;
     }
+    
+    try {
+        const shares = await fetchCategorySharesForOwner(categoryToDelete, firebaseUser.uid);
+        if (shares && shares.length > 0) {
+            toast({
+              title: "Exclusão Falhou",
+              description: `A categoria "${categoryToDelete}" está compartilhada com ${shares.length} grupo(s). Remova esses compartilhamentos primeiro.`,
+              variant: "destructive",
+            });
+            setIsDeleteCategoryDialogOpen(false);
+            setCategoryToDelete(null);
+            return;
+        }
+    } catch (e: any) {
+        toast({ title: "Erro ao Verificar Compartilhamentos", description: e.message || "Não foi possível verificar os compartilhamentos da categoria.", variant: "destructive" });
+        setIsDeleteCategoryDialogOpen(false);
+        setCategoryToDelete(null);
+        return;
+    }
+
+
+    const updatedCategories = userCategories.filter(cat => cat.toLowerCase() !== categoryToDelete.toLowerCase());
+    setUserCategories(updatedCategories);
+    localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(updatedCategories));
+    setActiveTab('Todas');
+    toast({ title: "Categoria Excluída", description: `A categoria "${categoryToDelete}" foi excluída.` });
+    
     setIsDeleteCategoryDialogOpen(false);
     setCategoryToDelete(null);
-  }, [firebaseUser, categoryToDelete, passwords, userCategories, toast, setActiveTab]);
+  }, [firebaseUser, categoryToDelete, passwords, userCategories, toast, setActiveTab, fetchCategorySharesForOwner]);
 
 
   const filteredPasswords = useMemo(() => {
@@ -463,7 +488,7 @@ export default function HomePage() {
                 <ShieldAlert className="h-5 w-5" />
                 <AlertTitle>Erro de Conexão ou Dados</AlertTitle>
                 <AlertDescription>
-                  {passwordManagerError} Verifique os logs do servidor, a conexão com o banco de dados e as configurações da API.
+                  {passwordManagerError} Verifique os logs do servidor (backend), a conexão com o banco de dados (MongoDB URI, IP Allowlist no Atlas) e as configurações da API. Tente recarregar a página.
                 </AlertDescription>
               </Alert>
             )}
@@ -527,24 +552,41 @@ export default function HomePage() {
                            <FolderKanban size={14} /> Todas
                         </Button>
                         {userCategories.map(category => {
-                           const isCategoryEmpty = !passwords.some(p => p.categoria?.toLowerCase() === category.toLowerCase() && !p.isDeleted);
+                           const isOwnedCategory = true; 
+                           const isCategoryEmptyForDeletion = !passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.toLowerCase() === category.toLowerCase() && !p.isDeleted);
+
                            return (
-                           <div key={category} className="relative group">
+                           <div key={category} className="relative group flex items-center">
                               <Button
                                  variant={activeTab === category ? "secondary" : "ghost"}
                                  size="sm"
                                  onClick={() => setActiveTab(category)}
-                                 className="flex items-center gap-1.5 h-8 px-3 rounded-md pr-7" 
+                                 className="flex items-center gap-1.5 h-8 px-3 rounded-md pr-2" 
                               >
                                  <FolderKanban size={14} />
                                  {category}
                               </Button>
-                              {isCategoryEmpty && (
+                              {isOwnedCategory && (
+                                <Button
+                                    asChild
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-accent/20 ml-0.5"
+                                    title={`Compartilhar categoria "${category}"`}
+                                    onClick={(e) => {
+                                        e.stopPropagation(); e.preventDefault();
+                                        handleOpenShareCategoryDialog(category);
+                                    }}
+                                >
+                                  <div><Share2 size={12} className="text-accent/80 hover:text-accent" /></div>
+                                </Button>
+                              )}
+                              {isOwnedCategory && isCategoryEmptyForDeletion && (
                                  <Button
                                     asChild 
                                     variant="ghost"
                                     size="icon"
-                                    className="absolute top-1/2 right-0.5 -translate-y-1/2 h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-destructive/20"
+                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-destructive/20 ml-0.5"
                                  >
                                     <div
                                        role="button"
@@ -602,7 +644,6 @@ export default function HomePage() {
                      isLoading={passwordsLoading}
                      onEdit={handleEditPassword}
                      onDelete={handleDeletePassword}
-                     onOpenShareDialog={handleOpenShareDialog}
                      searchTerm={searchTerm}
                      activeTab={activeTab}
                      currentUserId={firebaseUser.uid}
@@ -639,19 +680,19 @@ export default function HomePage() {
         onOpenChange={setIsClearAllDialogOpen}
         onConfirm={handleClearAllPasswords}
       />
-      {isShareDialogOpen && passwordToShare && firebaseUser && (
-        <SharePasswordDialog
-            isOpen={isShareDialogOpen}
+      {isShareCategoryDialogOpen && categoryToShare && firebaseUser && (
+        <ShareCategoryDialog
+            isOpen={isShareCategoryDialogOpen}
             onOpenChange={(open) => {
-                setIsShareDialogOpen(open);
-                if (!open) setPasswordToShare(null);
+                setIsShareCategoryDialogOpen(open);
+                if (!open) setCategoryToShare(null);
             }}
-            passwordEntry={passwordToShare}
-            currentUserId={firebaseUser.uid}
+            categoryName={categoryToShare}
+            ownerId={firebaseUser.uid} 
             userGroups={groups}
-            // onSharePassword, onUpdateShare, onRemoveShare removed
-            onShareWithGroup={sharePasswordWithGroup}
-            onUnshareFromGroup={unsharePasswordFromGroup}
+            onShareCategoryWithGroup={shareCategoryWithGroup}
+            onUnshareCategoryFromGroup={unshareCategoryFromGroup}
+            fetchCategoryShares={fetchCategorySharesForOwner}
         />
       )}
        <AlertDialog open={isDeleteCategoryDialogOpen} onOpenChange={setIsDeleteCategoryDialogOpen}>
@@ -659,7 +700,7 @@ export default function HomePage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir Categoria "{categoryToDelete}"?</AlertDialogTitle>
             <AlertDialogDescription>
-              Você tem certeza que deseja excluir esta categoria? Somente categorias vazias podem ser excluídas.
+              Somente categorias vazias e que não estão compartilhadas podem ser excluídas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

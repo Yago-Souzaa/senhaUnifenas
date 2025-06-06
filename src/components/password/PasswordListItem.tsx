@@ -2,11 +2,11 @@
 'use client';
 
 import { useState } from 'react';
-import type { PasswordEntry, Group } from '@/types'; // Added Group for context if needed
+import type { PasswordEntry, Group } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban, EllipsisVertical, Check, Share2, Users, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban, EllipsisVertical, Check, ShieldCheck } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,13 +33,12 @@ interface PasswordListItemProps {
   entry: PasswordEntry;
   onEdit: (entry: PasswordEntry) => void;
   onDelete: (id: string) => void;
-  onOpenShareDialog: (entry: PasswordEntry) => void;
   activeTab: string;
   currentUserId: string | undefined | null;
-  userGroups?: Group[]; // Pass user's groups to determine admin status for shared passwords
+  userGroups?: Group[];
 }
 
-export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, activeTab, currentUserId, userGroups = [] }: PasswordListItemProps) {
+export function PasswordListItem({ entry, onEdit, onDelete, activeTab, currentUserId, userGroups = [] }: PasswordListItemProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [copiedField, setCopiedField] = useState<string | null>(null);
   const { toast } = useToast();
@@ -63,34 +62,24 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
 
   const shouldShowCategoryBadge = entry.categoria && (activeTab === 'Todas' || activeTab.toLowerCase() !== entry.categoria.toLowerCase());
 
-  const effectiveOwnerId = entry.ownerId || entry.userId;
+  const effectiveOwnerId = entry.ownerId || entry.userId; // userId is legacy
   const isOwner = !!currentUserId && effectiveOwnerId === currentUserId;
 
-  // New permission logic:
-  // User can edit/delete if:
-  // 1. They are the owner of the password.
-  // 2. OR, the password is shared with a group, AND the user is an admin of THAT group.
   let canManagePassword = isOwner;
-  if (!canManagePassword && entry.sharedWithGroupIds && entry.sharedWithGroupIds.length > 0 && currentUserId) {
-    for (const groupId of entry.sharedWithGroupIds) {
-      const groupUserIsMemberOf = userGroups.find(g => g.id === groupId);
-      if (groupUserIsMemberOf && groupUserIsMemberOf.members.some(m => m.userId === currentUserId && m.role === 'admin')) {
-        canManagePassword = true;
-        break;
-      }
+  let isSharedViaCategoryAdmin = false;
+
+  if (!isOwner && entry.sharedVia && entry.sharedVia.groupId && currentUserId) {
+    const groupUserIsMemberOf = userGroups.find(g => g.id === entry.sharedVia!.groupId);
+    if (groupUserIsMemberOf && groupUserIsMemberOf.members.some(m => m.userId === currentUserId && m.role === 'admin')) {
+      canManagePassword = true;
+      isSharedViaCategoryAdmin = true;
     }
   }
 
   const canEdit = canManagePassword;
   const canDelete = canManagePassword;
-
-  // Individual sharing is deprecated, so these checks are removed/simplified
-  // const isSharedDirectly = entry.sharedWith && entry.sharedWith.length > 0; 
-  const isSharedWithGroups = entry.sharedWithGroupIds && entry.sharedWithGroupIds.length > 0;
-
-  // User can open share dialog if they own the password OR are an admin of any group.
-  // (Actual sharing to a specific group will be further permission-checked in the dialog/API)
-  const canOpenShareDialog = isOwner || userGroups.some(g => g.members.some(m => m.userId === currentUserId && m.role === 'admin'));
+  
+  const displaySharedVia = entry.sharedVia && !isOwner;
 
   return (
     <Card className="mb-3 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-md">
@@ -120,7 +109,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
             </div>
           </div>
           <div className="flex items-center mt-0.5 space-x-2 flex-wrap">
-            {shouldShowCategoryBadge && (
+            {shouldShowCategoryBadge && entry.categoria && (
               <div className="flex items-center">
                 <Badge variant="secondary" className="text-xs py-0.5 px-1.5">
                   <FolderKanban size={12} className="mr-1"/> {entry.categoria}
@@ -141,10 +130,14 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
                 </Button>
               </div>
             )}
-            {/* Removed individual share badge */}
-            {isSharedWithGroups && (
-                 <Badge variant={isOwner ? "outline" : "default"} className="text-xs py-0.5 px-1.5 cursor-default bg-teal-600 text-white hover:bg-teal-700" title={`Compartilhado com ${entry.sharedWithGroupIds?.length} grupo(s)`}>
-                    <ShieldCheck size={12} className="mr-1"/> {entry.sharedWithGroupIds?.length} {entry.sharedWithGroupIds?.length === 1 ? "Grupo" : "Grupos"}
+             {displaySharedVia && (
+                 <Badge variant="outline" className="text-xs py-0.5 px-1.5 cursor-default bg-teal-600 text-white hover:bg-teal-700" title={`Acessado via categoria "${entry.sharedVia?.categoryName}" do grupo "${entry.sharedVia?.groupName || 'Desconhecido'}"`}>
+                    <ShieldCheck size={12} className="mr-1"/> Compartilhado via Cat.
+                </Badge>
+            )}
+             {isSharedViaCategoryAdmin && (
+                 <Badge variant="default" className="text-xs py-0.5 px-1.5 cursor-default" title="Você é admin do grupo com o qual esta categoria está compartilhada.">
+                    Admin do Grupo
                 </Badge>
             )}
           </div>
@@ -170,14 +163,9 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
                   </DropdownMenuItem>
                 )}
                 
-                {canOpenShareDialog && (
-                  <DropdownMenuItem onClick={() => onOpenShareDialog(entry)} className="cursor-pointer">
-                    <Share2 size={16} className="mr-2" />
-                    Compartilhar com Grupos
-                  </DropdownMenuItem>
-                )}
-                
-                {(canEdit || canOpenShareDialog) && canDelete && <DropdownMenuSeparator />}
+                {/* Item de compartilhar com grupo REMOVIDO */}
+
+                {canEdit && canDelete && <DropdownMenuSeparator />}
 
                 {canDelete && (
                   <AlertDialogTrigger asChild>
@@ -191,9 +179,9 @@ export function PasswordListItem({ entry, onEdit, onDelete, onOpenShareDialog, a
                   </AlertDialogTrigger>
                 )}
 
-                {!canEdit && !canOpenShareDialog && !canDelete && (
+                {!canEdit && !canDelete && (
                    <DropdownMenuItem disabled className="text-muted-foreground px-2 py-1.5">
-                    Apenas Leitura
+                    Apenas Leitura (Via Categoria Compartilhada)
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>

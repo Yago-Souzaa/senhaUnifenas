@@ -1,7 +1,7 @@
 
 'use client';
 
-import type { PasswordEntry } from '@/types';
+import type { PasswordEntry, Group } from '@/types'; 
 import { PasswordListItem } from './PasswordListItem';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AlertTriangle, FolderOpen } from 'lucide-react';
@@ -12,13 +12,13 @@ interface PasswordListProps {
   isLoading: boolean;
   onEdit: (entry: PasswordEntry) => void;
   onDelete: (id: string) => void;
-  onOpenShareDialog: (entry: PasswordEntry) => void; // Nova prop
   searchTerm: string;
   activeTab: string;
   currentUserId: string | undefined | null;
+  userGroups?: Group[]; 
 }
 
-export function PasswordList({ passwords, isLoading, onEdit, onDelete, onOpenShareDialog, searchTerm, activeTab, currentUserId }: PasswordListProps) {
+export function PasswordList({ passwords, isLoading, onEdit, onDelete, searchTerm, activeTab, currentUserId, userGroups }: PasswordListProps) {
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -80,9 +80,9 @@ export function PasswordList({ passwords, isLoading, onEdit, onDelete, onOpenSha
           entry={entry} 
           onEdit={onEdit} 
           onDelete={onDelete} 
-          onOpenShareDialog={onOpenShareDialog} // Passar prop
           activeTab={activeTab}
           currentUserId={currentUserId}
+          userGroups={userGroups} 
         />
       ))}
     </div>
