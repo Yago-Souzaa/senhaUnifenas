@@ -11,9 +11,9 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { auth } from '@/lib/firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { KeyRound, LogIn, ArrowLeft, Users, PlusCircle, Trash2, Edit3, UserPlus, UserMinus, CheckCircle, ShieldQuestion } from 'lucide-react';
+import { KeyRound, LogIn, ArrowLeft, Users, PlusCircle, Trash2, Edit3, UserPlus, UserMinus, CheckCircle, ShieldQuestion, ShieldAlert, EllipsisVertical } from 'lucide-react';
 import type { FirebaseUser, Group, GroupMember } from '@/types';
-import { usePasswordManager } from '@/hooks/usePasswordManager'; // Assuming group functions are here
+import { usePasswordManager } from '@/hooks/usePasswordManager';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -33,7 +34,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { EllipsisVertical } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 
 
 export default function GroupsPage() {
@@ -59,6 +61,8 @@ export default function GroupsPage() {
   const [isCreateGroupDialogOpen, setIsCreateGroupDialogOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [editingGroup, setEditingGroup] = useState<Group | null>(null);
+  const [groupToRename, setGroupToRename] = useState<Group | null>(null);
+  const [renamingGroupName, setRenamingGroupName] = useState('');
   const [isManageMembersDialogOpen, setIsManageMembersDialogOpen] = useState(false);
   const [memberUidToAdd, setMemberUidToAdd] = useState('');
   const [memberRole, setMemberRole] = useState<'member' | 'admin'>('member');
@@ -69,12 +73,12 @@ export default function GroupsPage() {
       setFirebaseUser(user);
       setAuthLoading(false);
       if (user) {
-        fetchGroups(); // Fetch groups when user is loaded
+        fetchGroups();
       }
     });
     return () => unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // firebaseUser not needed in dep array due to onAuthStateChanged
+  }, []);
 
   const handleLogoutFirebase = async () => {
     try {
@@ -101,15 +105,16 @@ export default function GroupsPage() {
     }
   };
   
-  const handleUpdateGroup = async (groupId: string, name: string) => {
-    if (!name.trim()) {
-      toast({ title: "Nome Inválido", description: "O nome do grupo não pode ser vazio.", variant: "destructive" });
+  const handleRenameGroupConfirm = async () => {
+    if (!groupToRename || !renamingGroupName.trim()) {
+      toast({ title: "Dados Inválidos", description: "O nome do grupo não pode ser vazio.", variant: "destructive" });
       return;
     }
     try {
-      await updateGroup(groupId, name.trim());
-      toast({ title: "Grupo Atualizado!", description: `Grupo renomeado para "${name.trim()}".` });
-      setEditingGroup(null); // Close edit dialog/mode if any
+      await updateGroup(groupToRename.id, renamingGroupName.trim());
+      toast({ title: "Grupo Atualizado!", description: `Grupo renomeado para "${renamingGroupName.trim()}".` });
+      setGroupToRename(null);
+      setRenamingGroupName('');
     } catch (e: any) {
       toast({ title: "Erro ao Atualizar Grupo", description: e.message || "Não foi possível atualizar o grupo.", variant: "destructive" });
     }
@@ -139,8 +144,7 @@ export default function GroupsPage() {
         toast({ title: "Membro Adicionado", description: `Usuário adicionado ao grupo "${editingGroup.name}".` });
         setMemberUidToAdd('');
         setMemberRole('member');
-        // Optionally close dialog or refresh members list, current hook updates group state
-        const updatedGroup = groups.find(g => g.id === editingGroup.id);
+        const updatedGroup = groups.find(g => g.id === editingGroup.id); // Re-fetch or use hook's state
         if (updatedGroup) setEditingGroup(updatedGroup);
 
     } catch (e: any) {
@@ -153,7 +157,7 @@ export default function GroupsPage() {
         await removeGroupMember(groupId, memberUid);
         toast({ title: "Membro Removido", description: `Usuário removido do grupo "${groupName}".` });
         const updatedGroup = groups.find(g => g.id === groupId);
-        if (updatedGroup) setEditingGroup(updatedGroup); // Update currently editing group to reflect changes
+        if (updatedGroup) setEditingGroup(updatedGroup);
     } catch (e: any) {
         toast({ title: "Erro ao Remover Membro", description: e.message || "Não foi possível remover o membro.", variant: "destructive" });
     }
@@ -237,69 +241,71 @@ export default function GroupsPage() {
         {!isLoading && !error && groups.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {groups.map(group => (
-                    <Card key={group.id} className="flex flex-col">
-                        <CardHeader className="flex-row justify-between items-start">
-                            <div>
-                                <CardTitle className="font-headline text-lg text-primary">{group.name}</CardTitle>
-                                <CardDescription>
-                                    {group.ownerId === firebaseUser.uid ? "Você é o proprietário" : "Você é membro"}
-                                    &nbsp;&bull;&nbsp; {group.members.length} membro(s)
-                                </CardDescription>
-                            </div>
-                            {group.ownerId === firebaseUser.uid && (
-                                 <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
-                                            <EllipsisVertical size={18} />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                        <DropdownMenuItem onClick={() => { setEditingGroup(group); setIsManageMembersDialogOpen(true); }}>
-                                            <UserPlus className="mr-2 h-4 w-4" />Gerenciar Membros
-                                        </DropdownMenuItem>
-                                        <DropdownMenuItem onClick={() => { setEditingGroup(group); setNewGroupName(group.name); /* For rename dialog later */ }}>
-                                            <Edit3 className="mr-2 h-4 w-4" />Renomear Grupo (TODO)
-                                        </DropdownMenuItem>
-                                        <AlertDialogTrigger asChild>
-                                            <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={e=>e.preventDefault()}>
-                                                <Trash2 className="mr-2 h-4 w-4" />Deletar Grupo
+                    <AlertDialog key={group.id}> {/* AlertDialog root for each group item */}
+                        <Card className="flex flex-col h-full"> {/* Ensure card takes full height if needed */}
+                            <CardHeader className="flex-row justify-between items-start">
+                                <div>
+                                    <CardTitle className="font-headline text-lg text-primary">{group.name}</CardTitle>
+                                    <CardDescription>
+                                        {group.ownerId === firebaseUser.uid ? "Você é o proprietário" : "Você é membro"}
+                                        &nbsp;&bull;&nbsp; {group.members.length} membro(s)
+                                    </CardDescription>
+                                </div>
+                                {group.ownerId === firebaseUser.uid && (
+                                     <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
+                                                <EllipsisVertical size={18} />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem onClick={() => { setEditingGroup(group); setIsManageMembersDialogOpen(true); }}>
+                                                <UserPlus className="mr-2 h-4 w-4" />Gerenciar Membros
                                             </DropdownMenuItem>
-                                        </AlertDialogTrigger>
-                                    </DropdownMenuContent>
-                                 </DropdownMenu>
-                            )}
-                        </CardHeader>
-                        <CardContent className="flex-grow">
-                            <h4 className="text-sm font-medium mb-1">Membros:</h4>
-                            <ScrollArea className="h-24 text-xs">
-                                <ul className="space-y-1">
-                                {group.members.map(member => (
-                                    <li key={member.userId} className="flex justify-between items-center">
-                                        <span className="truncate" title={member.userId}>
-                                            UID: ...{member.userId.slice(-8)} 
-                                            {member.userId === firebaseUser.uid && " (Você)"}
-                                        </span>
-                                        <Badge variant={member.role === 'admin' ? "default" : "secondary"}>{member.role}</Badge>
-                                    </li>
-                                ))}
-                                </ul>
-                            </ScrollArea>
-                        </CardContent>
-                        <AlertDialogContent>
-                            <AlertDialogHeader>
-                                <AlertDialogTitle>Deletar Grupo "{group.name}"?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                Esta ação é irreversível. Todas as senhas compartilhadas com este grupo serão automaticamente desvinculadas dele.
-                                </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => handleDeleteGroup(group.id, group.name)} className="bg-destructive hover:bg-destructive/90">
-                                    Confirmar Deleção
-                                </AlertDialogAction>
-                            </AlertDialogFooter>
-                        </AlertDialogContent>
-                    </Card>
+                                            <DropdownMenuItem onClick={() => { setGroupToRename(group); setRenamingGroupName(group.name); }}>
+                                                <Edit3 className="mr-2 h-4 w-4" />Renomear Grupo
+                                            </DropdownMenuItem>
+                                            <AlertDialogTrigger asChild>
+                                                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10" onSelect={e=>e.preventDefault()}>
+                                                    <Trash2 className="mr-2 h-4 w-4" />Deletar Grupo
+                                                </DropdownMenuItem>
+                                            </AlertDialogTrigger>
+                                        </DropdownMenuContent>
+                                     </DropdownMenu>
+                                )}
+                            </CardHeader>
+                            <CardContent className="flex-grow">
+                                <h4 className="text-sm font-medium mb-1">Membros:</h4>
+                                <ScrollArea className="h-24 text-xs">
+                                    <ul className="space-y-1">
+                                    {group.members.map(member => (
+                                        <li key={member.userId} className="flex justify-between items-center">
+                                            <span className="truncate" title={member.userId}>
+                                                UID: ...{member.userId.slice(-8)} 
+                                                {member.userId === firebaseUser.uid && " (Você)"}
+                                            </span>
+                                            <Badge variant={member.role === 'admin' ? "default" : "secondary"}>{member.role}</Badge>
+                                        </li>
+                                    ))}
+                                    </ul>
+                                </ScrollArea>
+                            </CardContent>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>Deletar Grupo "{group.name}"?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                    Esta ação é irreversível. Todas as senhas compartilhadas com este grupo serão automaticamente desvinculadas dele.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleDeleteGroup(group.id, group.name)} className="bg-destructive hover:bg-destructive/90">
+                                        Confirmar Deleção
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </Card>
+                    </AlertDialog>
                 ))}
             </div>
         )}
@@ -324,6 +330,28 @@ export default function GroupsPage() {
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Rename Group Dialog */}
+      {groupToRename && (
+        <AlertDialog open={!!groupToRename} onOpenChange={(open) => { if (!open) setGroupToRename(null); }}>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>Renomear Grupo "{groupToRename.name}"</AlertDialogTitle>
+                  <AlertDialogDescription>Escolha um novo nome para o grupo.</AlertDialogDescription>
+              </AlertDialogHeader>
+              <Input 
+                  placeholder="Novo nome do Grupo" 
+                  value={renamingGroupName} 
+                  onChange={(e) => setRenamingGroupName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleRenameGroupConfirm(); }}}
+              />
+              <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => { setGroupToRename(null); setRenamingGroupName(''); }}>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleRenameGroupConfirm}>Renomear</AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
       
       {/* Manage Members Dialog */}
       {editingGroup && firebaseUser && (
@@ -335,12 +363,12 @@ export default function GroupsPage() {
                 </AlertDialogHeader>
                 <div className="py-4 space-y-4">
                     <h3 className="text-sm font-semibold">Adicionar Novo Membro</h3>
-                    <div className="grid grid-cols-3 gap-2 items-end">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 items-end">
                         <Input 
                             placeholder="UID do Membro" 
                             value={memberUidToAdd} 
                             onChange={(e) => setMemberUidToAdd(e.target.value)}
-                            className="col-span-2"
+                            className="sm:col-span-2"
                         />
                          <Select value={memberRole} onValueChange={(v: 'member' | 'admin') => setMemberRole(v)}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -408,3 +436,5 @@ export default function GroupsPage() {
     </div>
   );
 }
+
+    
