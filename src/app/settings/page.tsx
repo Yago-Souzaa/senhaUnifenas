@@ -127,10 +127,10 @@ export default function SettingsPage() {
                         size="icon"
                         onClick={handleCopyUid}
                         className={cn(
-                        "h-7 w-7 shrink-0 transition-transform duration-150",
-                        copiedUid
-                            ? 'scale-110 bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:text-foreground hover:bg-transparent'
+                          "h-7 w-7 shrink-0 transition-transform duration-150",
+                          copiedUid
+                            ? 'scale-110 bg-primary text-primary-foreground hover:bg-primary/90' // Mantém o hover primário quando copiado
+                            : 'text-muted-foreground hover:bg-secondary hover:text-secondary-foreground' // Usa hover secundário quando não copiado
                         )}
                         aria-label="Copiar UID"
                     >
