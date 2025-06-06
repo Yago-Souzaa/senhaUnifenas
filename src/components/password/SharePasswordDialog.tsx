@@ -63,7 +63,8 @@ export function SharePasswordDialog({
 
   if (!passwordEntry) return null;
 
-  const isOwner = passwordEntry.ownerId === currentUserId;
+  const effectiveOwnerId = passwordEntry.ownerId || passwordEntry.userId; // Considera o userId legado
+  const isOwner = !!currentUserId && effectiveOwnerId === currentUserId;
 
   const handleAddShare = async () => {
     if (!userIdToShareWith.trim()) {
@@ -237,3 +238,4 @@ export function SharePasswordDialog({
     </Dialog>
   );
 }
+
