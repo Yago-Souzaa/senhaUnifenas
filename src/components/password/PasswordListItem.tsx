@@ -6,7 +6,7 @@ import type { PasswordEntry, Group } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban, EllipsisVertical, Check, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, Copy, Edit2, Trash2, FolderKanban, EllipsisVertical, Check, ShieldCheck, Star } from 'lucide-react'; // Added Star
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,9 +60,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab, currentUs
       });
   };
 
-  const shouldShowCategoryBadge = entry.categoria && (activeTab === 'Todas' || activeTab.toLowerCase() !== entry.categoria.toLowerCase());
-
-  const effectiveOwnerId = entry.ownerId || entry.userId; // userId is legacy
+  const effectiveOwnerId = entry.ownerId || entry.userId; 
   const isOwner = !!currentUserId && effectiveOwnerId === currentUserId;
 
   let canManagePassword = isOwner;
@@ -75,20 +73,58 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab, currentUs
       isSharedViaCategoryAdmin = true;
     }
   }
-
-  const canEdit = canManagePassword;
-  const canDelete = canManagePassword;
   
+  const canEditDetails = canManagePassword;
+  const canDeletePassword = canManagePassword;
+  // Anyone who can see the password can favorite/unfavorite it (client-side action that calls onEdit)
+  // but only if onEdit can actually persist it (i.e. canManagePassword is true)
+  const canToggleFavorite = canManagePassword;
+
+
+  const handleToggleFavorite = () => {
+    if (!canToggleFavorite) {
+        toast({ title: "Permissão Negada", description: "Você não pode alterar o status de favorito desta senha.", variant: "destructive"});
+        return;
+    }
+    const updatedEntry = { ...entry, isFavorite: !entry.isFavorite };
+    onEdit(updatedEntry); // This will call updatePassword in the hook
+    toast({
+        title: entry.isFavorite ? "Removida dos Favoritos" : "Adicionada aos Favoritos",
+        description: `Senha "${entry.nome}" ${entry.isFavorite ? "não é mais" : "agora é"} favorita.`,
+    });
+  };
+
+  const shouldShowCategoryBadge = entry.categoria && (activeTab === 'Todos' || activeTab === "⭐ Favoritas" || activeTab.toLowerCase() !== entry.categoria.toLowerCase());
   const displaySharedVia = entry.sharedVia && !isOwner;
+  
+  const isVisuallySharedItem = !!entry.sharedVia && entry.ownerId !== currentUserId;
 
 
   return (
-    <Card className="mb-3 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-md">
+    <Card className={cn(
+        "mb-3 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-md"
+        // Style for shared item removed from here, will be on category tab
+        )}>
       <CardHeader className="py-3 px-4 flex flex-row justify-between items-start gap-3">
         <div className="flex-grow min-w-0">
           <div className="flex items-start justify-between">
             <div className="min-w-0">
               <div className="flex items-center">
+                {canToggleFavorite && (
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={handleToggleFavorite}
+                        className={cn(
+                            "h-7 w-7 mr-1 shrink-0 transition-colors duration-150",
+                            entry.isFavorite ? 'text-yellow-400 hover:text-yellow-500' : 'text-muted-foreground hover:text-yellow-400'
+                        )}
+                        aria-label={entry.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                        title={entry.isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
+                    >
+                        <Star size={18} fill={entry.isFavorite ? "currentColor" : "none"} />
+                    </Button>
+                )}
                 <CardTitle className="font-headline text-lg text-primary truncate mr-1" title={entry.nome}>
                   {entry.nome}
                 </CardTitle>
@@ -132,7 +168,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab, currentUs
               </div>
             )}
              {displaySharedVia && (
-                 <Badge variant="outline" className="text-xs py-0.5 px-1.5 cursor-default border-accent text-accent bg-accent/10 hover:bg-accent/20" title={`Acessado via categoria "${entry.sharedVia?.categoryName}" do grupo "${entry.sharedVia?.groupName || 'Desconhecido'}" (Proprietário: ${entry.sharedVia?.categoryOwnerId.substring(0,8)}...)`}>
+                 <Badge variant="outline" className="text-xs py-0.5 px-1.5 cursor-default border-accent text-accent bg-accent/10 hover:bg-accent/20" title={`Acessado via categoria "${entry.sharedVia?.categoryName}" do grupo "${entry.sharedVia?.groupName || 'Desconhecido'}" (Proprietário: ${entry.sharedVia?.categoryOwnerId ? entry.sharedVia.categoryOwnerId.substring(0,8) + '...' : 'Desconhecido'})`}>
                     <ShieldCheck size={12} className="mr-1"/> Compartilhado via Cat.
                 </Badge>
             )}
@@ -157,16 +193,16 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab, currentUs
                 <DropdownMenuLabel>Ações da Senha</DropdownMenuLabel>
                 <DropdownMenuSeparator />
 
-                {canEdit && (
+                {canEditDetails && (
                   <DropdownMenuItem onClick={() => onEdit(entry)} className="cursor-pointer">
                     <Edit2 size={16} className="mr-2" />
                     Editar Detalhes
                   </DropdownMenuItem>
                 )}
                 
-                {canEdit && canDelete && <DropdownMenuSeparator />}
+                {canEditDetails && canDeletePassword && <DropdownMenuSeparator />}
 
-                {canDelete && (
+                {canDeletePassword && (
                   <AlertDialogTrigger asChild>
                     <DropdownMenuItem
                       className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer"
@@ -178,7 +214,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab, currentUs
                   </AlertDialogTrigger>
                 )}
 
-                {!canEdit && !canDelete && (
+                {!canEditDetails && !canDeletePassword && (
                    <DropdownMenuItem disabled className="text-muted-foreground px-2 py-1.5">
                     Apenas Leitura (Via Categoria Compartilhada)
                   </DropdownMenuItem>
@@ -280,3 +316,4 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab, currentUs
     </Card>
   );
 }
+

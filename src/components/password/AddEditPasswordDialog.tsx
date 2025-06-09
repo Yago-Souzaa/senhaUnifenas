@@ -31,8 +31,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox"; // Added Checkbox
 import { useEffect } from "react";
-import { PlusCircle, Trash2 } from "lucide-react";
+import { PlusCircle, Trash2, Star } from "lucide-react"; // Added Star
 
 const customFieldSchema = z.object({
   label: z.string().min(1, { message: "Nome do campo é obrigatório." }),
@@ -46,6 +47,7 @@ const passwordFormSchema = z.object({
   categoria: z.string({ required_error: "Categoria é obrigatória. Por favor, selecione ou crie uma." })
                .min(1, { message: "Categoria é obrigatória. Por favor, selecione ou crie uma." }),
   customFields: z.array(customFieldSchema).optional(),
+  isFavorite: z.boolean().optional(), // Added isFavorite
 });
 
 export type PasswordFormValues = z.infer<typeof passwordFormSchema>;
@@ -61,7 +63,6 @@ interface AddEditPasswordDialogProps {
 export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialData, userCategories }: AddEditPasswordDialogProps) {
   const form = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordFormSchema),
-    // Default values are set/updated in useEffect based on initialData and isOpen
   });
 
   const { fields, append, remove } = useFieldArray({
@@ -71,24 +72,33 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
 
   useEffect(() => {
     if (isOpen) {
+      const categoryValue = initialData?.categoria?.trim();
       form.reset({
         nome: initialData?.nome || "",
         login: initialData?.login || "",
         senha: initialData?.senha || "",
-        categoria: initialData?.categoria?.trim() || undefined, // Use undefined if no category, Zod will catch it
+        categoria: categoryValue && userCategories.includes(categoryValue) ? categoryValue : undefined,
         customFields: initialData?.customFields || [],
+        isFavorite: initialData?.isFavorite || false,
       });
+       if (categoryValue && !userCategories.includes(categoryValue) && initialData?.id) {
+        // If editing and category is not in userCategories (e.g. shared), keep it
+        form.setValue('categoria', categoryValue);
+      }
     }
-  }, [initialData, form, isOpen]);
+  }, [initialData, form, isOpen, userCategories]);
 
   const handleSubmit = (data: PasswordFormValues) => {
     const submissionData = {
       ...data,
-      categoria: data.categoria.trim(), // Categoria já será uma string válida aqui devido ao Zod
+      categoria: data.categoria.trim(),
+      isFavorite: data.isFavorite || false,
     };
     onSubmit(submissionData, initialData?.id as string | undefined);
     onOpenChange(false);
   };
+  
+  const disableSubmit = userCategories.length === 0 && !initialData?.id && !form.watch('categoria');
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
@@ -100,6 +110,7 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
             senha: "",
             categoria: undefined, 
             customFields: [],
+            isFavorite: false,
         });
       }
     }}>
@@ -162,7 +173,7 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
                   <FormLabel>Categoria <span className="text-destructive">*</span></FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    value={field.value} // field.value será undefined se não houver categoria ou se não selecionado
+                    value={field.value}
                     disabled={userCategories.length === 0 && !initialData?.id}
                   >
                     <FormControl>
@@ -172,15 +183,40 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
                     </FormControl>
                     <SelectContent>
                       {userCategories.map((cat) => (
-                        cat && ( // Garante que cat não seja uma string vazia ou nula, se vier assim do array
+                        cat && (
                             <SelectItem key={cat} value={cat}>
                             {cat}
                             </SelectItem>
                         )
                       ))}
+                       {/* If editing and current category is not in list (e.g. shared, or from another user), show it */}
+                      {initialData?.id && initialData.categoria && !userCategories.includes(initialData.categoria.trim()) && (
+                        <SelectItem value={initialData.categoria.trim()} disabled>
+                          {initialData.categoria.trim()} (Atual)
+                        </SelectItem>
+                      )}
                     </SelectContent>
                   </Select>
                   <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="isFavorite"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center space-x-2 space-y-0 mt-4">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      id="isFavoriteCheckbox"
+                    />
+                  </FormControl>
+                  <FormLabel htmlFor="isFavoriteCheckbox" className="font-normal text-sm flex items-center cursor-pointer">
+                     <Star size={16} className="mr-2 text-yellow-400" fill="currentColor"/> Marcar como Favorita
+                  </FormLabel>
                 </FormItem>
               )}
             />
@@ -234,7 +270,7 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancelar</Button>
               </DialogClose>
-              <Button type="submit" disabled={userCategories.length === 0 && !initialData?.id}>
+              <Button type="submit" disabled={disableSubmit}>
                 {initialData?.id ? "Salvar Alterações" : "Adicionar Senha"}
               </Button>
             </DialogFooter>

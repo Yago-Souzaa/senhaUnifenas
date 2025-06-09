@@ -35,16 +35,18 @@ export async function GET(request: NextRequest) {
         const categoryNameFromShareRaw = share.categoryName;
         
         if (!categoryNameFromShareRaw || categoryNameFromShareRaw.trim() === '') {
+          console.warn(`Skipping share for owner ${share.ownerId} to group ${share.groupId} due to empty category name.`);
           continue; 
         }
         const categoryNameFromShare = categoryNameFromShareRaw.trim();
 
+        // Using a case-insensitive regex for category name matching
         const categoryRegex = new RegExp(`^${categoryNameFromShare.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
         
         const findCriteria: any = {
           ownerId: share.ownerId, 
           isDeleted: { $ne: true },
-          categoria: categoryRegex, // CORRIGIDO: Era 'category', agora é 'categoria'
+          categoria: categoryRegex,
         };
         
         const passwordsFromSharedCategoryRaw = await passwordsCollection.find(findCriteria).toArray();
@@ -62,9 +64,7 @@ export async function GET(request: NextRequest) {
 
           if (allAccessiblePasswordsMap.has(sharedPasswordCandidate.id)) {
             const existingPassword = allAccessiblePasswordsMap.get(sharedPasswordCandidate.id)!;
-            // Always update sharedVia info if we found it via a share, even if it's an owned password.
-            // This helps the UI show how it was accessed if via a group context.
-            existingPassword.sharedVia = sharedViaInfo;
+            existingPassword.sharedVia = sharedViaInfo; // Populate sharedVia if accessed through a share
             allAccessiblePasswordsMap.set(existingPassword.id, existingPassword);
           } else {
             sharedPasswordCandidate.sharedVia = sharedViaInfo;
@@ -93,11 +93,15 @@ export async function POST(request: NextRequest) {
     const { sharedVia, ...entryDataInput } = (await request.json()) as Omit<PasswordEntry, 'id' | 'ownerId' | 'userId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt'>;
     
     const trimmedCategory = entryDataInput.categoria?.trim();
-    if (!trimmedCategory) { // Ensure category is not empty after trimming
+    if (!trimmedCategory) {
         return NextResponse.json({ message: 'Category name cannot be empty.' }, { status: 400 });
     }
 
-    const entryData = { ...entryDataInput, categoria: trimmedCategory }; // Use trimmed category
+    const entryData = { 
+      ...entryDataInput, 
+      categoria: trimmedCategory,
+      isFavorite: entryDataInput.isFavorite || false, // Ensure isFavorite has a default
+    };
 
     const entryDataWithOwner: Omit<PasswordEntry, 'id' | 'sharedVia'> = {
       ...entryData,
@@ -128,3 +132,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Failed to add password', error: (error as Error).message }, { status: 500 });
   }
 }
+

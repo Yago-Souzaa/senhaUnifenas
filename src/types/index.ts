@@ -70,14 +70,13 @@ export interface PasswordEntry {
   senha?: string;
   categoria?: string;
   customFields?: Array<{ label: string; value: string }>;
+  isFavorite?: boolean; // Added for favorites
 
   createdAt?: Date;
   createdBy?: { userId: string; timestamp: Date };
   lastModifiedBy?: { userId: string; timestamp: Date };
 
   sharedWith?: SharedUser[]; // Deprecated for new shares
-
-  // sharedWithGroupIds?: string[]; // REMOVED - Replaced by CategoryShare logic
 
   // For client-side rendering, to know how this password was accessed if via a shared category
   sharedVia?: {
@@ -100,3 +99,4 @@ export interface PasswordEntry {
 export interface FirebaseUser extends FirebaseUserType {
   photoURL?: string | null;
 }
+

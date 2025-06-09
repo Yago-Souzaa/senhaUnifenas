@@ -36,7 +36,7 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
     }
 
     // Check access via shared category
-    if (passwordDoc.categoria && passwordDoc.ownerId) { // Changed from passwordDoc.category to passwordDoc.categoria
+    if (passwordDoc.categoria && passwordDoc.ownerId) { 
       const userGroupIds = (await groupsCollection.find({ 'members.userId': currentUserId })
         .project({ _id: 1 }).toArray())
         .map(g => g._id.toHexString());
@@ -44,7 +44,7 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
       if (userGroupIds.length > 0) {
         const relevantShare = await categorySharesCollection.findOne({
           ownerId: passwordDoc.ownerId,
-          categoryName: passwordDoc.categoria.trim(), // Ensure category name is trimmed for comparison
+          categoryName: passwordDoc.categoria.trim(),
           groupId: { $in: userGroupIds }
         });
 
@@ -90,15 +90,8 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
              return NextResponse.json({ message: 'Category name cannot be empty after trimming.' }, { status: 400 });
         }
         updatedEntryData.categoria = trimmedCategory;
-    } else {
-        // If categoria is not provided or is null/undefined in the input,
-        // it means we should not update it, or if it's intended to be cleared,
-        // the client should send an empty string which will be caught above if not allowed.
-        // For this model, category is mandatory, so not providing it means "keep existing".
-        // If an update aims to remove category, it should send categoria: "" which then fails.
-        // If client sends `null` for categoria, and your schema expects string, this is fine,
-        // but if it is *required*, it should be validated.
-        // Assuming client sends valid data or Zod handles it, here we ensure if it *is* sent, it's trimmed.
+    } else if (updatedEntryData.categoria !== undefined) { // only error if it's explicitly set to something non-string
+        return NextResponse.json({ message: 'Category name must be a string.' }, { status: 400 });
     }
     
     const { passwordsCollection, groupsCollection, categorySharesCollection } = await connectToDatabase();
@@ -112,7 +105,7 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
     let canModify = false;
     if (passwordDoc.ownerId === currentUserId) {
       canModify = true;
-    } else if (passwordDoc.categoria && passwordDoc.ownerId) { // Changed from passwordDoc.category to passwordDoc.categoria
+    } else if (passwordDoc.categoria && passwordDoc.ownerId) { 
       const userAdminGroupIds = (await groupsCollection.find({ members: { $elemMatch: { userId: currentUserId, role: 'admin' } } })
         .project({ _id: 1 }).toArray())
         .map(g => g._id.toHexString());
@@ -120,7 +113,7 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
       if (userAdminGroupIds.length > 0) {
         const relevantShareAsAdmin = await categorySharesCollection.findOne({
           ownerId: passwordDoc.ownerId,
-          categoryName: passwordDoc.categoria.trim(), // Ensure category name is trimmed
+          categoryName: passwordDoc.categoria.trim(),
           groupId: { $in: userAdminGroupIds }
         });
         if (relevantShareAsAdmin) {
@@ -134,26 +127,41 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
     }
 
     // Fields that should not be directly set via $set from client input
-    const { id: _idToRemove, ownerId, userId, sharedWith, history, isDeleted, createdBy, createdAt, lastModifiedBy, ...setOperationData } = updatedEntryData as any;
+    const { 
+      id: _idToRemove, 
+      ownerId, 
+      userId, 
+      sharedWith, 
+      history, 
+      isDeleted, 
+      createdBy, 
+      createdAt, 
+      lastModifiedBy, 
+      ...setOperationData 
+    } = updatedEntryData as any;
     
+    const updatedFields = { ...setOperationData };
+    if (typeof updatedEntryData.categoria === 'string') {
+        updatedFields.categoria = updatedEntryData.categoria; // Already trimmed
+    }
+    if (typeof updatedEntryData.isFavorite === 'boolean') {
+        updatedFields.isFavorite = updatedEntryData.isFavorite;
+    }
+
+
     const newHistoryEntry: HistoryEntry = {
       action: 'updated',
       userId: currentUserId,
       timestamp: new Date(),
-      details: { updatedFields: Object.keys(setOperationData) }
+      details: { updatedFields: Object.keys(updatedFields) }
     };
     const updatedHistory = [newHistoryEntry, ...(passwordDoc.history || [])].slice(0, 10);
 
     const updatePayload: any = { 
-      ...setOperationData, 
+      ...updatedFields, 
       lastModifiedBy: { userId: currentUserId, timestamp: new Date() },
       history: updatedHistory
     };
-
-    // Only set categoria in payload if it was part of setOperationData (i.e., provided in input)
-    if (typeof updatedEntryData.categoria === 'string') {
-        updatePayload.categoria = updatedEntryData.categoria; // Already trimmed
-    }
     
     const result = await passwordsCollection.updateOne(
       { _id: new ObjectId(id) },
@@ -195,7 +203,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
     let canModify = false;
     if (passwordDoc.ownerId === currentUserId) {
       canModify = true;
-    } else if (passwordDoc.categoria && passwordDoc.ownerId) { // Changed from passwordDoc.category to passwordDoc.categoria
+    } else if (passwordDoc.categoria && passwordDoc.ownerId) { 
        const userAdminGroupIds = (await groupsCollection.find({ members: { $elemMatch: { userId: currentUserId, role: 'admin' } } })
         .project({ _id: 1 }).toArray())
         .map(g => g._id.toHexString());
@@ -203,7 +211,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
       if (userAdminGroupIds.length > 0) {
         const relevantShareAsAdmin = await categorySharesCollection.findOne({
           ownerId: passwordDoc.ownerId,
-          categoryName: passwordDoc.categoria.trim(), // Ensure category name is trimmed
+          categoryName: passwordDoc.categoria.trim(),
           groupId: { $in: userAdminGroupIds }
         });
         if (relevantShareAsAdmin) {
@@ -244,3 +252,4 @@ export async function DELETE(request: NextRequest, { params }: { params: Params 
     return NextResponse.json({ message: 'Failed to delete password', error: (error as Error).message }, { status: 500 });
   }
 }
+

@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, KeyRound, EllipsisVertical, FolderKanban, Plus, X, Share2 } from 'lucide-react';
+import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, KeyRound, EllipsisVertical, FolderKanban, Plus, X, Share2, Star } from 'lucide-react'; // Added Star
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -47,6 +47,9 @@ import {
   onAuthStateChanged,
   type AuthError
 } from 'firebase/auth';
+
+const FAVORITES_TAB_NAME = "⭐ Favoritas";
+const ALL_TAB_NAME = "Todas";
 
 
 const GoogleIcon = () => (
@@ -95,7 +98,7 @@ export default function HomePage() {
   const [searchTerm, setSearchTerm] = useState('');
 
   const [userCategories, setUserCategories] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<string>('Todas');
+  const [activeTab, setActiveTab] = useState<string>(FAVORITES_TAB_NAME); // Default to Favorites
   const [isAddCategoryDialogOpen, setIsAddCategoryDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isDeleteCategoryDialogOpen, setIsDeleteCategoryDialogOpen] = useState(false);
@@ -118,13 +121,13 @@ export default function HomePage() {
         setAuthError(null);
         const storedCategories = localStorage.getItem(`userCategories_${user.uid}`);
         setUserCategories(storedCategories ? JSON.parse(storedCategories) : []);
-        setActiveTab('Todas');
+        setActiveTab(FAVORITES_TAB_NAME); // Default to Favorites on login
         fetchGroups().catch(err => {
             console.warn("HomePage: fetchGroups failed on auth state change:", err.message);
         });
       } else {
         setUserCategories([]);
-        setActiveTab('Todas');
+        setActiveTab(FAVORITES_TAB_NAME);
       }
     });
     return () => unsubscribe();
@@ -134,13 +137,13 @@ export default function HomePage() {
     if (firebaseUser && passwords) {
       const categoriesFromOwnedPasswords = passwords
         .filter(p => p.ownerId === firebaseUser.uid && p.categoria)
-        .map(p => p.categoria!.trim());
+        .map(p => p.categoria!.trim().toLowerCase());
 
       const categoriesFromSharedPasswords = passwords
         .filter(p => p.sharedVia && p.sharedVia.categoryName)
-        .map(p => p.sharedVia!.categoryName.trim());
+        .map(p => p.sharedVia!.categoryName.trim().toLowerCase());
       
-      const currentStoredCategories: string[] = JSON.parse(localStorage.getItem(`userCategories_${firebaseUser.uid}`) || '[]');
+      const currentStoredCategories: string[] = JSON.parse(localStorage.getItem(`userCategories_${firebaseUser.uid}`) || '[]').map((c:string) => c.trim().toLowerCase());
       
       const combinedCategories = Array.from(
         new Set([
@@ -150,10 +153,15 @@ export default function HomePage() {
         ])
       )
       .map(cat => cat.trim())
-      .filter(cat => cat && cat.length > 0) 
+      .filter(cat => cat && cat.length > 0)
+      // Capitalize first letter of each category for display, then sort
+      .map(cat => cat.charAt(0).toUpperCase() + cat.slice(1)) 
       .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
       
-      if (JSON.stringify(combinedCategories) !== JSON.stringify(userCategories)) {
+      // Check if a deep comparison is actually needed or if length and order is enough.
+      // For now, a simple stringify comparison might lead to unnecessary updates if order changes but content is same.
+      // However, since we sort, this should be mostly fine.
+      if (JSON.stringify(combinedCategories) !== JSON.stringify(userCategories.map(cat => cat.charAt(0).toUpperCase() + cat.slice(1)))) {
          setUserCategories(combinedCategories);
          localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(combinedCategories));
       }
@@ -245,6 +253,7 @@ export default function HomePage() {
       senha: data.senha,
       categoria: data.categoria,
       customFields: data.customFields || [],
+      isFavorite: data.isFavorite || false,
     };
     try {
       await addPassword(entryToAdd);
@@ -266,6 +275,7 @@ export default function HomePage() {
       senha: data.senha,
       categoria: data.categoria,
       customFields: data.customFields || [],
+      isFavorite: data.isFavorite || false,
     };
     try {
       await updatePassword(entryToUpdate);
@@ -347,7 +357,7 @@ export default function HomePage() {
       toast({ title: "Não autenticado", description: "Você precisa estar logado para exportar senhas.", variant: "destructive" });
       return;
     }
-    if (passwords.length === 0 && activeTab === 'Todas') { 
+    if (passwords.length === 0 && (activeTab === ALL_TAB_NAME || activeTab === FAVORITES_TAB_NAME)) { 
       toast({ title: "Nada para Exportar", description: "Não há senhas para exportar.", variant: "default" });
       return;
     }
@@ -362,8 +372,8 @@ export default function HomePage() {
   };
 
   const handleOpenAddPasswordDialog = () => {
-    const categoryToPreFill = (activeTab !== 'Todas') ? activeTab : "";
-    setEditingPassword({ categoria: categoryToPreFill });
+    const categoryToPreFill = (activeTab !== ALL_TAB_NAME && activeTab !== FAVORITES_TAB_NAME) ? activeTab : "";
+    setEditingPassword({ categoria: categoryToPreFill, isFavorite: activeTab === FAVORITES_TAB_NAME });
     setIsAddEditDialogOpen(true);
   };
 
@@ -384,12 +394,13 @@ export default function HomePage() {
       toast({ title: "Categoria Duplicada", description: `A categoria "${trimmedName}" já existe.`, variant: "destructive" });
       return false;
     }
-    const updatedCategories = [...userCategories, trimmedName].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    const capitalizedTrimmedName = trimmedName.charAt(0).toUpperCase() + trimmedName.slice(1);
+    const updatedCategories = [...userCategories, capitalizedTrimmedName].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
     setUserCategories(updatedCategories);
     localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(updatedCategories));
-    setActiveTab(trimmedName);
+    setActiveTab(capitalizedTrimmedName);
     setNewCategoryName('');
-    toast({title: "Categoria Adicionada", description: `Categoria "${trimmedName}" criada.`});
+    toast({title: "Categoria Adicionada", description: `Categoria "${capitalizedTrimmedName}" criada.`});
     return true;
   }, [newCategoryName, userCategories, firebaseUser, toast]);
 
@@ -431,7 +442,7 @@ export default function HomePage() {
     const updatedCategories = userCategories.filter(cat => cat.toLowerCase() !== categoryToDelete.toLowerCase());
     setUserCategories(updatedCategories);
     localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(updatedCategories));
-    setActiveTab('Todas');
+    setActiveTab(ALL_TAB_NAME);
     toast({ title: "Categoria Excluída", description: `A categoria "${categoryToDelete}" foi excluída.` });
 
     setIsDeleteCategoryDialogOpen(false);
@@ -443,7 +454,9 @@ export default function HomePage() {
     if (!firebaseUser || !passwords) return [];
     let tempPasswords = passwords.filter(p => !p.isDeleted);
 
-    if (activeTab !== 'Todas') {
+    if (activeTab === FAVORITES_TAB_NAME) {
+      tempPasswords = tempPasswords.filter(p => p.isFavorite);
+    } else if (activeTab !== ALL_TAB_NAME) {
       const lowerActiveTab = activeTab.trim().toLowerCase();
       tempPasswords = tempPasswords.filter(p => {
         const isOwnedInCategory = p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === lowerActiveTab;
@@ -567,20 +580,33 @@ export default function HomePage() {
                   <ScrollArea className="w-full whitespace-nowrap">
                      <div className="flex space-x-1 pb-1">
                         <Button
-                           variant={activeTab === 'Todas' ? "secondary" : "ghost"}
+                           variant={activeTab === FAVORITES_TAB_NAME ? "secondary" : "ghost"}
                            size="sm"
-                           onClick={() => setActiveTab('Todas')}
+                           onClick={() => setActiveTab(FAVORITES_TAB_NAME)}
                            className={cn(
                               "flex items-center gap-1 h-8 px-3 rounded-md",
-                              activeTab !== 'Todas' && "hover:bg-secondary hover:text-secondary-foreground"
+                              activeTab === FAVORITES_TAB_NAME ? "font-semibold text-yellow-500" : "hover:bg-secondary hover:text-secondary-foreground"
                            )}
                         >
-                           <FolderKanban size={14} /> Todas
+                           <Star size={14} className={cn(activeTab === FAVORITES_TAB_NAME && "fill-yellow-400 text-yellow-500", activeTab !== FAVORITES_TAB_NAME && "text-muted-foreground")} /> {FAVORITES_TAB_NAME.split(" ")[1]}
                         </Button>
+                        <Button
+                           variant={activeTab === ALL_TAB_NAME ? "secondary" : "ghost"}
+                           size="sm"
+                           onClick={() => setActiveTab(ALL_TAB_NAME)}
+                           className={cn(
+                              "flex items-center gap-1 h-8 px-3 rounded-md",
+                              activeTab !== ALL_TAB_NAME && "hover:bg-secondary hover:text-secondary-foreground"
+                           )}
+                        >
+                           <FolderKanban size={14} /> {ALL_TAB_NAME}
+                        </Button>
+
                         {userCategories.map(category => {
                            const lowerTrimmedCategory = category.trim().toLowerCase();
                            const hasExternalShare = categoriesWithExternalShares.has(lowerTrimmedCategory);
-                           const isOwnedCategory = passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === lowerTrimmedCategory);
+                           // A categoria é "própria" se existe alguma senha do usuário nela OU se ela foi adicionada manualmente (está em userCategories mas não necessariamente tem senhas)
+                           const isOwnedCategoryAndExists = passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === lowerTrimmedCategory) || userCategories.includes(category);
                            const isCategoryEmptyForDeletion = !passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === lowerTrimmedCategory && !p.isDeleted);
 
                            return (
@@ -592,14 +618,14 @@ export default function HomePage() {
                                  className={cn(
                                     "flex items-center gap-1.5 h-8 px-3 rounded-md pr-2", 
                                     hasExternalShare 
-                                      ? (activeTab === category ? "text-accent" : "text-accent hover:text-accent hover:bg-accent/10") 
+                                      ? (activeTab === category ? "text-accent font-semibold" : "text-accent hover:text-accent hover:bg-accent/10") 
                                       : (activeTab !== category && "hover:bg-secondary hover:text-secondary-foreground") 
                                   )}
                               >
                                  <FolderKanban size={14} className={cn(hasExternalShare && "text-accent")} />
                                  {category}
                               </Button>
-                              {isOwnedCategory && ( 
+                              {isOwnedCategoryAndExists && ( 
                                 <Button
                                     asChild
                                     variant="ghost"
@@ -614,7 +640,7 @@ export default function HomePage() {
                                   <div><Share2 size={12} className="text-accent/80 hover:text-accent" /></div>
                                 </Button>
                               )}
-                              {isOwnedCategory && isCategoryEmptyForDeletion && (
+                              {isOwnedCategoryAndExists && isCategoryEmptyForDeletion && (
                                  <Button
                                     asChild
                                     variant="ghost"
@@ -751,3 +777,4 @@ export default function HomePage() {
     </div>
   );
 }
+

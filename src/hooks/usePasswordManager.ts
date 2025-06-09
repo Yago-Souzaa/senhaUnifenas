@@ -99,7 +99,7 @@ export function usePasswordManager(currentUserId?: string | null) {
   const addPassword = useCallback(async (entryData: Omit<PasswordEntry, 'id' | 'ownerId' | 'userId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt' | 'sharedVia'>) => {
     if (!currentUserId) throw new Error('User not authenticated');
     try {
-      const payload = { ...entryData };
+      const payload = { ...entryData, isFavorite: entryData.isFavorite || false };
       const response = await fetch(API_BASE_URL, {
         method: 'POST',
         headers: {
@@ -125,6 +125,9 @@ export function usePasswordManager(currentUserId?: string | null) {
     if (!currentUserId) throw new Error('User not authenticated');
     try {
       const payload = { ...updatedEntry };
+      // Ensure isFavorite is explicitly set, defaulting to false if undefined
+      payload.isFavorite = typeof updatedEntry.isFavorite === 'boolean' ? updatedEntry.isFavorite : false;
+      
       const response = await fetch(`${API_BASE_URL}/${updatedEntry.id}`, {
         method: 'PUT',
         headers: {
@@ -419,7 +422,7 @@ export function usePasswordManager(currentUserId?: string | null) {
   const fetchCategorySharesForOwner = useCallback(async (categoryName: string, ownerId: string): Promise<CategoryShare[]> => {
     if (!currentUserId) { 
         console.warn('fetchCategorySharesForOwner called without currentUserId, returning empty array.');
-        return []; // Return empty or throw, depending on desired strictness
+        return [];
     }
     if (typeof fetch === 'undefined') { 
       console.warn('fetchCategorySharesForOwner called in an environment without fetch.');
