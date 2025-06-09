@@ -78,7 +78,7 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
     if (isOpen) {
       const effectiveCategory = (initialData?.categoria === "" || initialData?.categoria === undefined)
         ? NO_CATEGORY_VALUE
-        : initialData.categoria || NO_CATEGORY_VALUE; // Garante que NO_CATEGORY_VALUE seja usado se initialData.categoria for falsy mas não ""
+        : initialData.categoria?.trim() || NO_CATEGORY_VALUE;
 
       form.reset({
         nome: initialData?.nome || "",
@@ -91,15 +91,9 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
   }, [initialData, form, isOpen]);
 
   const handleSubmit = (data: PasswordFormValues) => {
-    // A validação do schema já garantiu que data.categoria não é NO_CATEGORY_VALUE.
-    // A transformação abaixo é para garantir consistência caso o schema mude no futuro
-    // ou para cenários onde a categoria pudesse ser "" por outras vias.
-    // No entanto, com o .refine atual, data.categoria sempre será uma categoria válida aqui.
     const submissionData = {
       ...data,
-      // Se data.categoria fosse NO_CATEGORY_VALUE (o que o refine impede), viraria "".
-      // Como o refine impede, data.categoria já é a categoria correta.
-      categoria: data.categoria === NO_CATEGORY_VALUE ? "" : data.categoria,
+      categoria: data.categoria === NO_CATEGORY_VALUE ? "" : data.categoria.trim(),
     };
     onSubmit(submissionData as PasswordFormValues, initialData?.id as string | undefined);
     onOpenChange(false);

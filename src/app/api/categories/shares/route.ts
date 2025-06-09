@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const ownerId = searchParams.get('ownerId');
   const groupId = searchParams.get('groupId');
-  const categoryName = searchParams.get('categoryName');
+  const categoryNameParam = searchParams.get('categoryName');
 
   try {
     const { categorySharesCollection, groupsCollection } = await connectToDatabase();
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
 
     if (ownerId) query.ownerId = ownerId;
     if (groupId) query.groupId = groupId;
-    if (categoryName) query.categoryName = categoryName;
+    if (categoryNameParam) query.categoryName = categoryNameParam.trim(); // Trim category name from query
 
     // Security: If no specific filters are provided, only return shares relevant to the current user.
     // 1. Shares they own.
@@ -41,38 +41,30 @@ export async function GET(request: NextRequest) {
       if (userGroupIds.length > 0) {
         query.$or.push({ groupId: { $in: userGroupIds } });
       }
-      // If user is not in any groups and is not owner of any shares, $or might be empty or just {ownerId...}
-      // which is fine.
       if(query.$or.length === 1 && !userGroupIds.length && query.$or[0].ownerId === currentUserId) {
         // Only owned shares if not in any groups
       } else if (query.$or.length === 0) {
-        // User has no shares they own and is in no groups, return empty
          return NextResponse.json([], { status: 200 });
       }
     } else {
       // If specific filters are applied, ensure the user has some relation.
-      // For simplicity, if ownerId is specified, it must be currentUserId unless they are querying for a group they are in.
       if (ownerId && ownerId !== currentUserId) {
-          // Check if current user is member of the group if groupId is also specified
           if (groupId) {
               const group = await groupsCollection.findOne({_id: new ObjectId(groupId), "members.userId": currentUserId});
               if (!group) {
                 return NextResponse.json({ message: "Access denied to view shares for this owner/group combination."}, {status: 403});
               }
           } else {
-             // User is asking for shares of another owner, without specifying a group they are in. Deny.
              return NextResponse.json({ message: "Access denied to view shares for this owner."}, {status: 403});
           }
       }
-      // If groupId is specified, user must be a member of that group to see its shares (unless they are the owner of the share)
-      if (groupId && (!ownerId || ownerId !== currentUserId)) { // if ownerId is specified and it's them, that's fine
+      if (groupId && (!ownerId || ownerId !== currentUserId)) { 
           const group = await groupsCollection.findOne({_id: new ObjectId(groupId), "members.userId": currentUserId});
           if (!group) {
             return NextResponse.json({ message: "Access denied to view shares for this group."}, {status: 403});
           }
       }
     }
-
 
     const shares = await categorySharesCollection.find(query).toArray();
     return NextResponse.json(shares.map(share => fromMongo(share as any)), { status: 200 });
