@@ -23,15 +23,15 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { AlertCircle, ListChecks, Share2, ShieldCheck, Trash2, Loader2 } from 'lucide-react'; // Added Loader2
+import { AlertCircle, ListChecks, Share2, ShieldCheck, Trash2, Loader2 } from 'lucide-react'; 
 import { Separator } from '../ui/separator';
 
 interface ShareCategoryDialogProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   categoryName: string;
-  ownerId: string;
-  userGroups: Group[];
+  ownerId: string; // This is the current logged-in user's ID when they are sharing their own category
+  userGroups: Group[]; // All groups the current user is part of
   onShareCategoryWithGroup: (categoryName: string, groupId: string) => Promise<CategoryShare | undefined>;
   onUnshareCategoryFromGroup: (categoryName: string, groupId: string) => Promise<void>;
   fetchCategorySharesForOwner: (categoryName: string, ownerId: string) => Promise<CategoryShare[]>;
@@ -127,8 +127,12 @@ export function ShareCategoryDialog({
     }
   };
 
+  // Filter groups to show only those where the current user (ownerId of the category) is an admin
+  // AND the category is not already shared with that group.
   const availableGroupsToShareWith = userGroups.filter(
-    ug => !sharedWithGroups.some(swg => swg.groupId === ug.id)
+    ug => 
+      ug.members.some(m => m.userId === ownerId && m.role === 'admin') && // User must be admin of the group
+      !sharedWithGroups.some(swg => swg.groupId === ug.id)
   );
 
 
@@ -141,7 +145,7 @@ export function ShareCategoryDialog({
           </DialogTitle>
           <DialogDescription>
             Compartilhe a categoria <span className="font-semibold">"{categoryName}"</span> (e todas as senhas dentro dela que você possui) com seus grupos.
-            Apenas você, como proprietário da categoria, pode iniciar ou remover compartilhamentos.
+            Apenas você, como proprietário da categoria e administrador do grupo de destino, pode iniciar ou remover compartilhamentos.
           </DialogDescription>
         </DialogHeader>
 
@@ -161,7 +165,7 @@ export function ShareCategoryDialog({
                   <div>
                     <Select value={selectedGroupId} onValueChange={setSelectedGroupId} disabled={isSubmitting || isLoadingShares}>
                       <SelectTrigger id="groupIdToShareWith" className="mt-1 h-9">
-                        <SelectValue placeholder="Selecione um grupo" />
+                        <SelectValue placeholder="Selecione um grupo (admin)" />
                       </SelectTrigger>
                       <SelectContent>
                         {availableGroupsToShareWith.map(group => (
@@ -179,7 +183,7 @@ export function ShareCategoryDialog({
                 </>
               ) : (
                 <p className="text-xs text-muted-foreground p-2 bg-background/50 rounded-md">
-                  {userGroups.length === 0 ? "Você não possui grupos para compartilhar ou eles não puderam ser carregados." : "Esta categoria já está compartilhada com todos os seus grupos disponíveis ou eles não puderam ser carregados."}
+                  {userGroups.length === 0 ? "Você não possui grupos ou não é admin de nenhum grupo." : "Esta categoria já está compartilhada com todos os grupos dos quais você é administrador, ou você não é admin de nenhum grupo restante."}
                 </p>
               )}
             </div>
@@ -203,6 +207,11 @@ export function ShareCategoryDialog({
                 <ul className="space-y-2">
                   {sharedWithGroups.map((share) => {
                     const group = userGroups.find(ug => ug.id === share.groupId);
+                    // Logic for unsharing: 
+                    // 1. User owns the category (share.ownerId === ownerId, which is current user)
+                    // OR 2. User is an admin of the group (group.members has current user as admin)
+                    const canUnshareThis = (share.ownerId === ownerId) || (group?.members.some(m => m.userId === ownerId && m.role === 'admin'));
+
                     return (
                       <li key={share.groupId} className="p-3 border rounded-md bg-background flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                         <div className="flex-grow min-w-0">
@@ -213,16 +222,20 @@ export function ShareCategoryDialog({
                           <p className="text-xs text-muted-foreground">Compartilhado em: {new Date(share.sharedAt).toLocaleDateString()}</p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0 mt-2 sm:mt-0">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleUnshare(share.groupId)}
-                            className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8"
-                            disabled={isSubmitting || isLoadingShares}
-                            aria-label={`Remover compartilhamento com grupo ${group?.name || share.groupId}`}
-                          >
-                            {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 size={16} />}
-                          </Button>
+                          {canUnshareThis ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleUnshare(share.groupId)}
+                              className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8"
+                              disabled={isSubmitting || isLoadingShares}
+                              aria-label={`Remover compartilhamento com grupo ${group?.name || share.groupId}`}
+                            >
+                              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 size={16} />}
+                            </Button>
+                          ) : (
+                             <Badge variant="outline" className="text-xs px-2 py-1">Ver Apenas</Badge>
+                          )}
                         </div>
                       </li>
                     );
@@ -241,3 +254,4 @@ export function ShareCategoryDialog({
     </Dialog>
   );
 }
+

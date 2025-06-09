@@ -31,6 +31,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ message: 'Group not found' }, { status: 404 });
     }
 
+    // New Rule: User sharing the category must be an admin of the target group
+    const isUserAdminOfTargetGroup = group.members.some(member => member.userId === currentUserId && member.role === 'admin');
+    if (!isUserAdminOfTargetGroup) {
+        return NextResponse.json({ message: 'You must be an administrator of the target group to share this category with it.' }, { status: 403 });
+    }
+
     const existingShare = await categorySharesCollection.findOne({
       ownerId: currentUserId, 
       categoryName: trimmedCategoryName,
@@ -65,3 +71,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: 'Failed to share category', error: error.message }, { status: 500 });
   }
 }
+
