@@ -34,7 +34,6 @@ export async function GET(request: NextRequest) {
       for (const share of categorySharesToUserGroups) {
         const categoryNameFromShareRaw = share.categoryName;
         
-        // CRITICAL: Only proceed if the shared category has a valid, non-empty name
         if (!categoryNameFromShareRaw || categoryNameFromShareRaw.trim() === '') {
           continue; 
         }
@@ -45,7 +44,7 @@ export async function GET(request: NextRequest) {
         const findCriteria: any = {
           ownerId: share.ownerId, 
           isDeleted: { $ne: true },
-          category: categoryRegex, // Match category name case-insensitively
+          category: categoryRegex,
         };
         
         const passwordsFromSharedCategoryRaw = await passwordsCollection.find(findCriteria).toArray();
@@ -63,10 +62,10 @@ export async function GET(request: NextRequest) {
 
           if (allAccessiblePasswordsMap.has(sharedPasswordCandidate.id)) {
             const existingPassword = allAccessiblePasswordsMap.get(sharedPasswordCandidate.id)!;
-            if (!existingPassword.sharedVia) { 
-              existingPassword.sharedVia = sharedViaInfo;
-              allAccessiblePasswordsMap.set(existingPassword.id, existingPassword);
-            }
+            // Always update sharedVia info if we found it via a share, even if it's an owned password.
+            // This helps the UI show how it was accessed if via a group context.
+            existingPassword.sharedVia = sharedViaInfo;
+            allAccessiblePasswordsMap.set(existingPassword.id, existingPassword);
           } else {
             sharedPasswordCandidate.sharedVia = sharedViaInfo;
             allAccessiblePasswordsMap.set(sharedPasswordCandidate.id, sharedPasswordCandidate);
@@ -91,13 +90,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // sharedVia is a client-side field, remove it before saving
     const { sharedVia, ...entryDataInput } = (await request.json()) as Omit<PasswordEntry, 'id' | 'ownerId' | 'userId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt'>;
     
-    // Ensure category is trimmed and not empty after client-side validation
     const trimmedCategory = entryDataInput.categoria?.trim();
     if (!trimmedCategory) {
-        // This should ideally be caught by client-side Zod validation, but as a safeguard:
         return NextResponse.json({ message: 'Category name cannot be empty.' }, { status: 400 });
     }
 
@@ -109,7 +105,7 @@ export async function POST(request: NextRequest) {
       userId: userId, 
       createdAt: new Date(),
       createdBy: { userId: userId, timestamp: new Date() },
-      sharedWith: [], // Legacy, clear it.
+      sharedWith: [], 
       history: [{ action: 'created', userId: userId, timestamp: new Date() }],
       isDeleted: false,
     };
