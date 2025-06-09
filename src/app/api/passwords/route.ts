@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
         const findCriteria: any = {
           ownerId: share.ownerId, 
           isDeleted: { $ne: true },
-          category: categoryRegex,
+          categoria: categoryRegex, // CORRIGIDO: Era 'category', agora é 'categoria'
         };
         
         const passwordsFromSharedCategoryRaw = await passwordsCollection.find(findCriteria).toArray();
@@ -93,11 +93,11 @@ export async function POST(request: NextRequest) {
     const { sharedVia, ...entryDataInput } = (await request.json()) as Omit<PasswordEntry, 'id' | 'ownerId' | 'userId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt'>;
     
     const trimmedCategory = entryDataInput.categoria?.trim();
-    if (!trimmedCategory) {
+    if (!trimmedCategory) { // Ensure category is not empty after trimming
         return NextResponse.json({ message: 'Category name cannot be empty.' }, { status: 400 });
     }
 
-    const entryData = { ...entryDataInput, categoria: trimmedCategory };
+    const entryData = { ...entryDataInput, categoria: trimmedCategory }; // Use trimmed category
 
     const entryDataWithOwner: Omit<PasswordEntry, 'id' | 'sharedVia'> = {
       ...entryData,
