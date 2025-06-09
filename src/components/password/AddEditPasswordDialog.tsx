@@ -109,7 +109,7 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
           <DialogDescription>
             {initialData?.id ? "Atualize os detalhes da senha." : "Preencha os campos para adicionar uma nova senha."}
             {userCategories.length === 0 && !initialData?.id && (
-                <p className="text-destructive text-xs mt-1">Nenhuma categoria encontrada. Crie uma na tela principal antes de adicionar senhas.</p>
+                <div className="text-destructive text-xs mt-1">Nenhuma categoria encontrada. Crie uma na tela principal antes de adicionar senhas.</div>
             )}
           </DialogDescription>
         </DialogHeader>
