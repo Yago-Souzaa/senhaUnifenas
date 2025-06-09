@@ -80,9 +80,17 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab, currentUs
   const canDelete = canManagePassword;
   
   const displaySharedVia = entry.sharedVia && !isOwner;
+  // Se sharedVia existir, significa que esta senha é acessada por compartilhamento,
+  // mesmo que também seja do próprio usuário (caso ele esteja vendo todas as senhas).
+  // O destaque visual é mais importante quando NÃO é o proprietário.
+  const isVisuallySharedItem = !!entry.sharedVia && entry.ownerId !== currentUserId;
+
 
   return (
-    <Card className="mb-3 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-md">
+    <Card className={cn(
+      "mb-3 shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-md",
+      isVisuallySharedItem && "border-l-4 border-accent pl-1" // Destaque visual para item compartilhado de outro usuário
+    )}>
       <CardHeader className="py-3 px-4 flex flex-row justify-between items-start gap-3">
         <div className="flex-grow min-w-0">
           <div className="flex items-start justify-between">
@@ -131,7 +139,7 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab, currentUs
               </div>
             )}
              {displaySharedVia && (
-                 <Badge variant="outline" className="text-xs py-0.5 px-1.5 cursor-default border-accent text-accent bg-accent/10 hover:bg-accent/20" title={`Acessado via categoria "${entry.sharedVia?.categoryName}" do grupo "${entry.sharedVia?.groupName || 'Desconhecido'}"`}>
+                 <Badge variant="outline" className="text-xs py-0.5 px-1.5 cursor-default border-accent text-accent bg-accent/10 hover:bg-accent/20" title={`Acessado via categoria "${entry.sharedVia?.categoryName}" do grupo "${entry.sharedVia?.groupName || 'Desconhecido'}" (Proprietário: ${entry.sharedVia?.categoryOwnerId.substring(0,8)}...)`}>
                     <ShieldCheck size={12} className="mr-1"/> Compartilhado via Cat.
                 </Badge>
             )}
@@ -279,4 +287,3 @@ export function PasswordListItem({ entry, onEdit, onDelete, activeTab, currentUs
     </Card>
   );
 }
-

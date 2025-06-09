@@ -349,7 +349,8 @@ export default function HomePage() {
   };
 
   const handleOpenAddPasswordDialog = () => {
-    setEditingPassword({ categoria: activeTab !== 'Todas' ? activeTab : "" });
+    const categoryToPreFill = (activeTab !== 'Todas') ? activeTab : "";
+    setEditingPassword({ categoria: categoryToPreFill });
     setIsAddEditDialogOpen(true);
   };
 
@@ -426,10 +427,21 @@ export default function HomePage() {
 
 
   const filteredPasswords = useMemo(() => {
+    if (!firebaseUser) return [];
     let tempPasswords = passwords.filter(p => !p.isDeleted);
+
     if (activeTab !== 'Todas') {
-      tempPasswords = tempPasswords.filter(p => p.categoria?.toLowerCase() === activeTab.toLowerCase());
+      const lowerActiveTab = activeTab.toLowerCase();
+      tempPasswords = tempPasswords.filter(p => {
+        // Check if it's an owned password in this category
+        const isOwnedInCategory = p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === lowerActiveTab;
+        // Check if it's a password shared via a category that matches the activeTab name
+        const isSharedViaThisCategoryName = p.sharedVia && p.sharedVia.categoryName.trim().toLowerCase() === lowerActiveTab;
+        return isOwnedInCategory || isSharedViaThisCategoryName;
+      });
     }
+    // else: activeTab is "Todas", all non-deleted passwords are included already
+
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
       tempPasswords = tempPasswords.filter(p =>
@@ -440,11 +452,12 @@ export default function HomePage() {
             cf.label.toLowerCase().includes(lowerSearchTerm) ||
             cf.value.toLowerCase().includes(lowerSearchTerm)
         )) ||
-        (p.sharedVia?.groupName && p.sharedVia.groupName.toLowerCase().includes(lowerSearchTerm))
+        (p.sharedVia?.groupName && p.sharedVia.groupName.toLowerCase().includes(lowerSearchTerm)) ||
+        (p.sharedVia?.categoryOwnerId && p.sharedVia.categoryOwnerId.toLowerCase().includes(lowerSearchTerm)) // Search by owner of shared item
       );
     }
-    return tempPasswords;
-  }, [passwords, activeTab, searchTerm]);
+    return tempPasswords.sort((a,b) => a.nome.localeCompare(b.nome));
+  }, [passwords, activeTab, searchTerm, firebaseUser]);
 
 
   if (authLoading) { 
