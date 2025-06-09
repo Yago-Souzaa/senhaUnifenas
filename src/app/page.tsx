@@ -116,6 +116,7 @@ export default function HomePage() {
       setAuthLoading(false);
       if (user) {
         setAuthError(null);
+        // Initial load from localStorage, will be refined by passwords effect
         const storedCategories = localStorage.getItem(`userCategories_${user.uid}`);
         setUserCategories(storedCategories ? JSON.parse(storedCategories) : []);
         setActiveTab('Todas');
@@ -131,34 +132,36 @@ export default function HomePage() {
   }, [fetchGroups]);
 
   useEffect(() => {
-    if (firebaseUser && passwords.length > 0) {
-      const categoriesFromOwnedPasswords = Array.from(
-        new Set(
-          passwords
-            .filter(p => p.ownerId === firebaseUser.uid && p.categoria)
-            .map(p => p.categoria!)
-        )
-      );
-      const currentStoredCategories = JSON.parse(localStorage.getItem(`userCategories_${firebaseUser.uid}`) || '[]');
-      const combinedCategories = Array.from(new Set([...currentStoredCategories, ...categoriesFromOwnedPasswords]
-        .map(cat => cat.trim())
-        .filter(cat => cat.length > 0)
-        .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
-      ));
+    if (firebaseUser && passwords) { // Check if passwords is not undefined
+      const categoriesFromOwnedPasswords = passwords
+        .filter(p => p.ownerId === firebaseUser.uid && p.categoria)
+        .map(p => p.categoria!.trim());
 
+      const categoriesFromSharedPasswords = passwords
+        .filter(p => p.sharedVia && p.sharedVia.categoryName)
+        .map(p => p.sharedVia!.categoryName.trim());
+      
+      const currentStoredCategories: string[] = JSON.parse(localStorage.getItem(`userCategories_${firebaseUser.uid}`) || '[]');
+      
+      const combinedCategories = Array.from(
+        new Set([
+          ...currentStoredCategories,
+          ...categoriesFromOwnedPasswords,
+          ...categoriesFromSharedPasswords
+        ])
+      )
+      .map(cat => cat.trim()) // Ensure all are trimmed
+      .filter(cat => cat && cat.length > 0) // Filter out empty or null strings
+      .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+
+      // Only update if there's a change to prevent infinite loops
       if (JSON.stringify(combinedCategories) !== JSON.stringify(userCategories)) {
          setUserCategories(combinedCategories);
          localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(combinedCategories));
       }
-    } else if (firebaseUser && passwords.length === 0) {
-        const storedCategories = localStorage.getItem(`userCategories_${firebaseUser.uid}`);
-        const loadedCategories = storedCategories ? JSON.parse(storedCategories) : [];
-        if (JSON.stringify(loadedCategories) !== JSON.stringify(userCategories)) {
-            setUserCategories(loadedCategories);
-        }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [passwords, firebaseUser]);
+  }, [passwords, firebaseUser]); // Removed userCategories from deps to avoid loop with its own update
 
 
   const handleFirebaseError = (error: AuthError) => {
@@ -383,7 +386,7 @@ export default function HomePage() {
   const handleConfirmDeleteCategory = useCallback(async () => {
     if (!firebaseUser || !categoryToDelete) return;
 
-    const passwordsInCategory = passwords.filter(p => p.ownerId === firebaseUser.uid && p.categoria?.toLowerCase() === categoryToDelete.toLowerCase() && !p.isDeleted);
+    const passwordsInCategory = passwords.filter(p => p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === categoryToDelete.toLowerCase() && !p.isDeleted);
 
     if (passwordsInCategory.length > 0) {
       toast({
@@ -427,20 +430,17 @@ export default function HomePage() {
 
 
   const filteredPasswords = useMemo(() => {
-    if (!firebaseUser) return [];
+    if (!firebaseUser || !passwords) return []; // Ensure passwords is not undefined
     let tempPasswords = passwords.filter(p => !p.isDeleted);
 
     if (activeTab !== 'Todas') {
       const lowerActiveTab = activeTab.toLowerCase();
       tempPasswords = tempPasswords.filter(p => {
-        // Check if it's an owned password in this category
         const isOwnedInCategory = p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === lowerActiveTab;
-        // Check if it's a password shared via a category that matches the activeTab name
-        const isSharedViaThisCategoryName = p.sharedVia && p.sharedVia.categoryName.trim().toLowerCase() === lowerActiveTab;
+        const isSharedViaThisCategoryName = p.sharedVia && p.sharedVia.categoryName?.trim().toLowerCase() === lowerActiveTab;
         return isOwnedInCategory || isSharedViaThisCategoryName;
       });
     }
-    // else: activeTab is "Todas", all non-deleted passwords are included already
 
     if (searchTerm) {
       const lowerSearchTerm = searchTerm.toLowerCase();
@@ -453,7 +453,7 @@ export default function HomePage() {
             cf.value.toLowerCase().includes(lowerSearchTerm)
         )) ||
         (p.sharedVia?.groupName && p.sharedVia.groupName.toLowerCase().includes(lowerSearchTerm)) ||
-        (p.sharedVia?.categoryOwnerId && p.sharedVia.categoryOwnerId.toLowerCase().includes(lowerSearchTerm)) // Search by owner of shared item
+        (p.sharedVia?.categoryOwnerId && p.sharedVia.categoryOwnerId.toLowerCase().includes(lowerSearchTerm))
       );
     }
     return tempPasswords.sort((a,b) => a.nome.localeCompare(b.nome));
@@ -568,8 +568,8 @@ export default function HomePage() {
                            <FolderKanban size={14} /> Todas
                         </Button>
                         {userCategories.map(category => {
-                           const isOwnedCategory = true; 
-                           const isCategoryEmptyForDeletion = !passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.toLowerCase() === category.toLowerCase() && !p.isDeleted);
+                           const isOwnedCategory = passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === category.toLowerCase());
+                           const isCategoryEmptyForDeletion = !passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === category.toLowerCase() && !p.isDeleted);
 
                            return (
                            <div key={category} className="relative group flex items-center">
@@ -737,3 +737,4 @@ export default function HomePage() {
     </div>
   );
 }
+
