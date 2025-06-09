@@ -116,7 +116,6 @@ export default function HomePage() {
       setAuthLoading(false);
       if (user) {
         setAuthError(null);
-        // Initial load from localStorage, will be refined by passwords effect
         const storedCategories = localStorage.getItem(`userCategories_${user.uid}`);
         setUserCategories(storedCategories ? JSON.parse(storedCategories) : []);
         setActiveTab('Todas');
@@ -132,7 +131,7 @@ export default function HomePage() {
   }, [fetchGroups]);
 
   useEffect(() => {
-    if (firebaseUser && passwords) { // Check if passwords is not undefined
+    if (firebaseUser && passwords) {
       const categoriesFromOwnedPasswords = passwords
         .filter(p => p.ownerId === firebaseUser.uid && p.categoria)
         .map(p => p.categoria!.trim());
@@ -150,18 +149,29 @@ export default function HomePage() {
           ...categoriesFromSharedPasswords
         ])
       )
-      .map(cat => cat.trim()) // Ensure all are trimmed
-      .filter(cat => cat && cat.length > 0) // Filter out empty or null strings
+      .map(cat => cat.trim())
+      .filter(cat => cat && cat.length > 0) 
       .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-
-      // Only update if there's a change to prevent infinite loops
+      
       if (JSON.stringify(combinedCategories) !== JSON.stringify(userCategories)) {
          setUserCategories(combinedCategories);
          localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(combinedCategories));
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [passwords, firebaseUser]); // Removed userCategories from deps to avoid loop with its own update
+  }, [passwords, firebaseUser]);
+
+
+  const categoriesWithExternalShares = useMemo(() => {
+    if (!firebaseUser || !passwords) return new Set<string>();
+    const set = new Set<string>();
+    passwords.forEach(p => {
+      if (p.sharedVia && p.ownerId !== firebaseUser.uid && p.sharedVia.categoryName) {
+        set.add(p.sharedVia.categoryName.trim().toLowerCase());
+      }
+    });
+    return set;
+  }, [passwords, firebaseUser]);
 
 
   const handleFirebaseError = (error: AuthError) => {
@@ -430,11 +440,11 @@ export default function HomePage() {
 
 
   const filteredPasswords = useMemo(() => {
-    if (!firebaseUser || !passwords) return []; // Ensure passwords is not undefined
+    if (!firebaseUser || !passwords) return [];
     let tempPasswords = passwords.filter(p => !p.isDeleted);
 
     if (activeTab !== 'Todas') {
-      const lowerActiveTab = activeTab.toLowerCase();
+      const lowerActiveTab = activeTab.trim().toLowerCase();
       tempPasswords = tempPasswords.filter(p => {
         const isOwnedInCategory = p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === lowerActiveTab;
         const isSharedViaThisCategoryName = p.sharedVia && p.sharedVia.categoryName?.trim().toLowerCase() === lowerActiveTab;
@@ -568,8 +578,10 @@ export default function HomePage() {
                            <FolderKanban size={14} /> Todas
                         </Button>
                         {userCategories.map(category => {
-                           const isOwnedCategory = passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === category.toLowerCase());
-                           const isCategoryEmptyForDeletion = !passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === category.toLowerCase() && !p.isDeleted);
+                           const lowerTrimmedCategory = category.trim().toLowerCase();
+                           const hasExternalShare = categoriesWithExternalShares.has(lowerTrimmedCategory);
+                           const isOwnedCategory = passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === lowerTrimmedCategory);
+                           const isCategoryEmptyForDeletion = !passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === lowerTrimmedCategory && !p.isDeleted);
 
                            return (
                            <div key={category} className="relative group flex items-center">
@@ -578,11 +590,13 @@ export default function HomePage() {
                                  size="sm"
                                  onClick={() => setActiveTab(category)}
                                  className={cn(
-                                    "flex items-center gap-1.5 h-8 px-3 rounded-md pr-2",
-                                    activeTab !== category && "hover:bg-secondary hover:text-secondary-foreground"
+                                    "flex items-center gap-1.5 h-8 px-3 rounded-md pr-2", 
+                                    hasExternalShare 
+                                      ? (activeTab === category ? "text-accent" : "text-accent hover:text-accent hover:bg-accent/10") 
+                                      : (activeTab !== category && "hover:bg-secondary hover:text-secondary-foreground") 
                                   )}
                               >
-                                 <FolderKanban size={14} />
+                                 <FolderKanban size={14} className={cn(hasExternalShare && "text-accent")} />
                                  {category}
                               </Button>
                               {isOwnedCategory && ( 
@@ -737,4 +751,3 @@ export default function HomePage() {
     </div>
   );
 }
-
