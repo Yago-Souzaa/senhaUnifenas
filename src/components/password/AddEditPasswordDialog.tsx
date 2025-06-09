@@ -34,9 +34,6 @@ import {
 import { useEffect } from "react";
 import { PlusCircle, Trash2 } from "lucide-react";
 
-// Special value for the "No Category" option to avoid empty string in SelectItem value
-const NO_CATEGORY_VALUE = "__NO_CATEGORY_INTERNAL__";
-
 const customFieldSchema = z.object({
   label: z.string().min(1, { message: "Nome do campo é obrigatório." }),
   value: z.string().min(1, { message: "Valor é obrigatório." }),
@@ -46,10 +43,8 @@ const passwordFormSchema = z.object({
   nome: z.string().min(1, { message: "Nome é obrigatório." }),
   login: z.string().min(1, { message: "Login é obrigatório." }),
   senha: z.string().optional(),
-  categoria: z.string({required_error: "Por favor, selecione uma categoria."}) // Tornando obrigatório
-    .refine(val => val !== NO_CATEGORY_VALUE, {
-      message: "Por favor, selecione uma categoria válida. Não é permitido salvar senhas sem categoria.",
-    }),
+  categoria: z.string({ required_error: "Categoria é obrigatória. Por favor, selecione ou crie uma." })
+               .min(1, { message: "Categoria é obrigatória. Por favor, selecione ou crie uma." }),
   customFields: z.array(customFieldSchema).optional(),
 });
 
@@ -76,15 +71,11 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
 
   useEffect(() => {
     if (isOpen) {
-      const effectiveCategory = (initialData?.categoria === "" || initialData?.categoria === undefined)
-        ? NO_CATEGORY_VALUE
-        : initialData.categoria?.trim() || NO_CATEGORY_VALUE;
-
       form.reset({
         nome: initialData?.nome || "",
         login: initialData?.login || "",
         senha: initialData?.senha || "",
-        categoria: effectiveCategory,
+        categoria: initialData?.categoria?.trim() || undefined, // Use undefined if no category, Zod will catch it
         customFields: initialData?.customFields || [],
       });
     }
@@ -93,9 +84,9 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
   const handleSubmit = (data: PasswordFormValues) => {
     const submissionData = {
       ...data,
-      categoria: data.categoria === NO_CATEGORY_VALUE ? "" : data.categoria.trim(),
+      categoria: data.categoria.trim(), // Categoria já será uma string válida aqui devido ao Zod
     };
-    onSubmit(submissionData as PasswordFormValues, initialData?.id as string | undefined);
+    onSubmit(submissionData, initialData?.id as string | undefined);
     onOpenChange(false);
   };
 
@@ -107,7 +98,7 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
             nome: "",
             login: "",
             senha: "",
-            categoria: NO_CATEGORY_VALUE, // Reset para "Sem Categoria" para limpar estado de validação
+            categoria: undefined, 
             customFields: [],
         });
       }
@@ -117,6 +108,9 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
           <DialogTitle className="font-headline text-primary">{initialData?.id ? "Editar Senha" : "Adicionar Nova Senha"}</DialogTitle>
           <DialogDescription>
             {initialData?.id ? "Atualize os detalhes da senha." : "Preencha os campos para adicionar uma nova senha."}
+            {userCategories.length === 0 && !initialData?.id && (
+                <p className="text-destructive text-xs mt-1">Nenhuma categoria encontrada. Crie uma na tela principal antes de adicionar senhas.</p>
+            )}
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -168,7 +162,8 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
                   <FormLabel>Categoria <span className="text-destructive">*</span></FormLabel>
                   <Select
                     onValueChange={field.onChange}
-                    value={field.value || NO_CATEGORY_VALUE} 
+                    value={field.value} // field.value será undefined se não houver categoria ou se não selecionado
+                    disabled={userCategories.length === 0 && !initialData?.id}
                   >
                     <FormControl>
                       <SelectTrigger>
@@ -176,9 +171,8 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      <SelectItem value={NO_CATEGORY_VALUE}>Sem Categoria (selecione uma válida)</SelectItem>
                       {userCategories.map((cat) => (
-                        cat && cat !== NO_CATEGORY_VALUE && (
+                        cat && ( // Garante que cat não seja uma string vazia ou nula, se vier assim do array
                             <SelectItem key={cat} value={cat}>
                             {cat}
                             </SelectItem>
@@ -240,7 +234,7 @@ export function AddEditPasswordDialog({ isOpen, onOpenChange, onSubmit, initialD
               <DialogClose asChild>
                 <Button type="button" variant="outline">Cancelar</Button>
               </DialogClose>
-              <Button type="submit">
+              <Button type="submit" disabled={userCategories.length === 0 && !initialData?.id}>
                 {initialData?.id ? "Salvar Alterações" : "Adicionar Senha"}
               </Button>
             </DialogFooter>

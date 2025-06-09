@@ -32,19 +32,21 @@ export async function GET(request: NextRequest) {
       const categorySharesToUserGroups = await categorySharesCollection.find({ groupId: { $in: userGroupIds } }).toArray();
       
       for (const share of categorySharesToUserGroups) {
-        const categoryNameFromShare = share.categoryName; 
-        const categoryRegex = categoryNameFromShare ? new RegExp(`^${categoryNameFromShare.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') : null;
+        const categoryNameFromShareRaw = share.categoryName;
+        
+        // CRITICAL: Only proceed if the shared category has a valid, non-empty name
+        if (!categoryNameFromShareRaw || categoryNameFromShareRaw.trim() === '') {
+          continue; 
+        }
+        const categoryNameFromShare = categoryNameFromShareRaw.trim();
 
+        const categoryRegex = new RegExp(`^${categoryNameFromShare.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+        
         const findCriteria: any = {
           ownerId: share.ownerId, 
-          isDeleted: { $ne: true }
+          isDeleted: { $ne: true },
+          category: categoryRegex, // Match category name case-insensitively
         };
-
-        if (categoryRegex) {
-          findCriteria.category = categoryRegex;
-        } else {
-          findCriteria.category = { $in: [null, ""] };
-        }
         
         const passwordsFromSharedCategoryRaw = await passwordsCollection.find(findCriteria).toArray();
         const groupDocForShare = userGroupDocs.find(g => g._id.toHexString() === share.groupId);
@@ -61,14 +63,11 @@ export async function GET(request: NextRequest) {
 
           if (allAccessiblePasswordsMap.has(sharedPasswordCandidate.id)) {
             const existingPassword = allAccessiblePasswordsMap.get(sharedPasswordCandidate.id)!;
-            // Se a senha já existe (ex: é do próprio usuário),
-            // só preenche 'sharedVia' se ainda não tiver, para indicar que também é acessível por este grupo.
             if (!existingPassword.sharedVia) { 
               existingPassword.sharedVia = sharedViaInfo;
               allAccessiblePasswordsMap.set(existingPassword.id, existingPassword);
             }
           } else {
-            // Senha de outro usuário, compartilhada com o currentUserId via este grupo/categoria.
             sharedPasswordCandidate.sharedVia = sharedViaInfo;
             allAccessiblePasswordsMap.set(sharedPasswordCandidate.id, sharedPasswordCandidate);
           }
@@ -93,8 +92,17 @@ export async function POST(request: NextRequest) {
 
   try {
     // sharedVia is a client-side field, remove it before saving
-    const { sharedVia, ...entryData } = (await request.json()) as Omit<PasswordEntry, 'id' | 'ownerId' | 'userId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt'>;
+    const { sharedVia, ...entryDataInput } = (await request.json()) as Omit<PasswordEntry, 'id' | 'ownerId' | 'userId' | 'sharedWith' | 'history' | 'isDeleted' | 'createdBy' | 'lastModifiedBy' | 'createdAt'>;
     
+    // Ensure category is trimmed and not empty after client-side validation
+    const trimmedCategory = entryDataInput.categoria?.trim();
+    if (!trimmedCategory) {
+        // This should ideally be caught by client-side Zod validation, but as a safeguard:
+        return NextResponse.json({ message: 'Category name cannot be empty.' }, { status: 400 });
+    }
+
+    const entryData = { ...entryDataInput, categoria: trimmedCategory };
+
     const entryDataWithOwner: Omit<PasswordEntry, 'id' | 'sharedVia'> = {
       ...entryData,
       ownerId: userId,
