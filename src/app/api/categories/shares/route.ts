@@ -2,6 +2,7 @@
 'use server';
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { getUserId } from '@/lib/auth';
 import { connectToDatabase, fromMongo } from '@/lib/mongodb';
 import type { CategoryShare } from '@/types';
 import { ObjectId } from 'mongodb';
@@ -9,9 +10,9 @@ import { ObjectId } from 'mongodb';
 // GET /api/categories/shares - List category shares
 // Query params: ownerId, groupId, categoryName (all optional)
 export async function GET(request: NextRequest) {
-  const currentUserId = request.headers.get('X-User-ID');
+  const currentUserId = await getUserId(request);
   if (!currentUserId) {
-    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+    return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);

@@ -1,5 +1,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { getUserId } from '@/lib/auth';
+import { decryptEntry } from '@/lib/crypto';
 import { connectToDatabase, fromMongo } from '@/lib/mongodb';
 import type { PasswordEntry } from '@/types';
 
@@ -16,16 +18,16 @@ const escapeCSVField = (field?: string | number | null): string => {
   };
 
 export async function GET(request: NextRequest) {
-  const userId = request.headers.get('X-User-ID');
+  const userId = await getUserId(request);
   if (!userId) {
-    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+    return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
   }
 
   try {
     const { passwordsCollection } = await connectToDatabase();
     // Filtrar senhas pelo ownerId e que não estão deletadas
     const passwordsFromDb = await passwordsCollection.find({ ownerId: userId, isDeleted: { $ne: true } }).toArray();
-    const passwords = passwordsFromDb.map(doc => fromMongo(doc as any)) as PasswordEntry[];
+    const passwords = passwordsFromDb.map(doc => decryptEntry(fromMongo(doc as any) as PasswordEntry));
 
     if (passwords.length === 0) {
       return NextResponse.json({ message: "No passwords to export for this user" }, { status: 404 });

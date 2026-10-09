@@ -2,6 +2,8 @@
 'use server';
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { getUserId } from '@/lib/auth';
+import { decryptEntry, encryptEntry } from '@/lib/crypto';
 import { connectToDatabase, fromMongo } from '@/lib/mongodb';
 import type { PasswordEntry, HistoryEntry, Group, CategoryShare } from '@/types';
 import { ObjectId } from 'mongodb';
@@ -11,9 +13,9 @@ interface Params {
 }
 
 export async function GET(request: NextRequest, { params }: { params: Params }) {
-  const currentUserId = request.headers.get('X-User-ID');
+  const currentUserId = await getUserId(request);
   if (!currentUserId) {
-    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+    return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
   }
 
   try {
@@ -32,7 +34,7 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
 
     // Check direct ownership
     if (passwordDoc.ownerId === currentUserId) {
-      return NextResponse.json(passwordDoc, { status: 200 });
+      return NextResponse.json(decryptEntry(passwordDoc), { status: 200 });
     }
 
     // Check access via shared category
@@ -56,7 +58,7 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
             groupId: relevantShare.groupId,
             groupName: groupDoc?.name || "Unknown Group"
           };
-          return NextResponse.json(passwordDoc, { status: 200 });
+          return NextResponse.json(decryptEntry(passwordDoc), { status: 200 });
         }
       }
     }
@@ -69,9 +71,9 @@ export async function GET(request: NextRequest, { params }: { params: Params }) 
 }
 
 export async function PUT(request: NextRequest, { params }: { params: Params }) {
-  const currentUserId = request.headers.get('X-User-ID');
+  const currentUserId = await getUserId(request);
   if (!currentUserId) {
-    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+    return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
   }
 
   try {
@@ -158,7 +160,7 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
     const updatedHistory = [newHistoryEntry, ...(passwordDoc.history || [])].slice(0, 10);
 
     const updatePayload: any = { 
-      ...updatedFields, 
+      ...encryptEntry(updatedFields), 
       lastModifiedBy: { userId: currentUserId, timestamp: new Date() },
       history: updatedHistory
     };
@@ -173,7 +175,7 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
     }
     
     const updatedDocDb = await passwordsCollection.findOne({_id: new ObjectId(id)});
-    return NextResponse.json(fromMongo(updatedDocDb as any), { status: 200 });
+    return NextResponse.json(decryptEntry(fromMongo(updatedDocDb as any) as PasswordEntry), { status: 200 });
   } catch (error) {
     console.error('Failed to update password:', error);
     return NextResponse.json({ message: 'Failed to update password', error: (error as Error).message }, { status: 500 });
@@ -181,9 +183,9 @@ export async function PUT(request: NextRequest, { params }: { params: Params }) 
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: Params }) {
-  const currentUserId = request.headers.get('X-User-ID');
+  const currentUserId = await getUserId(request);
   if (!currentUserId) {
-    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+    return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
   }
 
   try {

@@ -2,6 +2,7 @@
 'use server';
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { getUserId } from '@/lib/auth';
 import { connectToDatabase, fromMongo } from '@/lib/mongodb'; // fromMongo might be needed for PUT response
 import { ObjectId } from 'mongodb';
 // import type { PasswordEntry } from '@/types'; // Not directly used in DELETE or PUT here
@@ -12,9 +13,9 @@ interface GroupParams {
 
 // DELETE /api/groups/[groupId] - Delete a group
 export async function DELETE(request: NextRequest, { params }: { params: GroupParams }) {
-  const currentUserId = request.headers.get('X-User-ID');
+  const currentUserId = await getUserId(request);
   if (!currentUserId) {
-    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+    return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
   }
 
   try {
@@ -91,9 +92,9 @@ export async function DELETE(request: NextRequest, { params }: { params: GroupPa
 
 // PUT /api/groups/[groupId] - Update group name (example, can be extended)
 export async function PUT(request: NextRequest, { params }: { params: GroupParams }) {
-  const currentUserId = request.headers.get('X-User-ID');
+  const currentUserId = await getUserId(request);
   if (!currentUserId) {
-    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+    return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
   }
 
   try {

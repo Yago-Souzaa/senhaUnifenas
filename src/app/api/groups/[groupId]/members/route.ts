@@ -2,6 +2,7 @@
 'use server';
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { getUserId } from '@/lib/auth';
 import { connectToDatabase, fromMongo } from '@/lib/mongodb';
 import type { GroupMember, Group } from '@/types';
 import { ObjectId } from 'mongodb';
@@ -12,9 +13,9 @@ interface GroupMemberParams {
 
 // POST /api/groups/[groupId]/members - Add a member to a group
 export async function POST(request: NextRequest, { params }: { params: GroupMemberParams }) {
-  const currentActionUserId = request.headers.get('X-User-ID');
+  const currentActionUserId = await getUserId(request);
   if (!currentActionUserId) {
-    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+    return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
   }
 
   try {

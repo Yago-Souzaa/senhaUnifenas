@@ -1,11 +1,12 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { getUserId } from '@/lib/auth';
 import { connectToDatabase } from '@/lib/mongodb';
 
 export async function POST(request: NextRequest) {
-  const userId = request.headers.get('X-User-ID');
+  const userId = await getUserId(request);
   if (!userId) {
-    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+    return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
   }
 
   try {

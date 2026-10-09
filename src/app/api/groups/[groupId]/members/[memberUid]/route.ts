@@ -2,6 +2,7 @@
 'use server';
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { getUserId } from '@/lib/auth';
 import { connectToDatabase, fromMongo } from '@/lib/mongodb';
 import { ObjectId } from 'mongodb';
 import type { GroupMember, Group } from '@/types';
@@ -13,9 +14,9 @@ interface GroupMemberManagementParams {
 
 // DELETE /api/groups/[groupId]/members/[memberUid] - Remove a member from a group
 export async function DELETE(request: NextRequest, { params }: { params: GroupMemberManagementParams }) {
-  const currentActionUserId = request.headers.get('X-User-ID');
+  const currentActionUserId = await getUserId(request);
   if (!currentActionUserId) {
-    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+    return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
   }
 
   try {
@@ -88,9 +89,9 @@ export async function DELETE(request: NextRequest, { params }: { params: GroupMe
 
 // PUT /api/groups/[groupId]/members/[memberUid] - Update a member's role
 export async function PUT(request: NextRequest, { params }: { params: GroupMemberManagementParams }) {
-  const currentActionUserId = request.headers.get('X-User-ID');
+  const currentActionUserId = await getUserId(request);
   if (!currentActionUserId) {
-    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+    return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
   }
 
   try {

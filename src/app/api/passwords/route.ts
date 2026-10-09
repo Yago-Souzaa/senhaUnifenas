@@ -2,14 +2,16 @@
 'use server';
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { getUserId } from '@/lib/auth';
+import { decryptEntry, encryptEntry } from '@/lib/crypto';
 import { connectToDatabase, fromMongo } from '@/lib/mongodb';
 import type { PasswordEntry, Group, CategoryShare } from '@/types';
 import { ObjectId } from 'mongodb';
 
 export async function GET(request: NextRequest) {
-  const currentUserId = request.headers.get('X-User-ID');
+  const currentUserId = await getUserId(request);
   if (!currentUserId) {
-    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+    return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
   }
 
   try {
@@ -20,7 +22,7 @@ export async function GET(request: NextRequest) {
     // 1. Fetch passwords directly owned by the current user
     const ownedPasswordsRaw = await passwordsCollection.find({ ownerId: currentUserId, isDeleted: { $ne: true } }).toArray();
     ownedPasswordsRaw.forEach(doc => {
-      const password = fromMongo(doc as any) as PasswordEntry;
+      const password = decryptEntry(fromMongo(doc as any) as PasswordEntry);
       allAccessiblePasswordsMap.set(password.id, password);
     });
 
@@ -53,7 +55,7 @@ export async function GET(request: NextRequest) {
         const groupDocForShare = userGroupDocs.find(g => g._id.toHexString() === share.groupId);
 
         passwordsFromSharedCategoryRaw.forEach(doc => {
-          const sharedPasswordCandidate = fromMongo(doc as any) as PasswordEntry;
+          const sharedPasswordCandidate = decryptEntry(fromMongo(doc as any) as PasswordEntry);
           
           const sharedViaInfo = {
             categoryOwnerId: share.ownerId,
@@ -84,9 +86,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const userId = request.headers.get('X-User-ID');
+  const userId = await getUserId(request);
   if (!userId) {
-    return NextResponse.json({ message: 'User ID not provided in headers' }, { status: 401 });
+    return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
   }
 
   try {
@@ -115,7 +117,7 @@ export async function POST(request: NextRequest) {
     };
     
     const { passwordsCollection } = await connectToDatabase();
-    const result = await passwordsCollection.insertOne(entryDataWithOwner as any);
+    const result = await passwordsCollection.insertOne(encryptEntry(entryDataWithOwner) as any);
     
     if (!result.insertedId) {
         throw new Error('Failed to insert password, no ID returned');

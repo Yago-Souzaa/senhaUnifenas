@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { PasswordEntry, Group, GroupMember, CategoryShare } from '@/types'; // Added CategoryShare
+import { authFetch } from '@/lib/authFetch';
 
 const API_BASE_URL = '/api/passwords';
 const GROUPS_API_BASE_URL = '/api/groups';
@@ -35,8 +36,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       return;
     }
     try {
-      const response = await fetch(API_BASE_URL, {
-        headers: { 'X-User-ID': currentUserId }
+      const response = await authFetch(API_BASE_URL, {
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, `Failed to fetch passwords`);
@@ -57,8 +57,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       return;
     }
     try {
-      const response = await fetch(GROUPS_API_BASE_URL, {
-        headers: { 'X-User-ID': currentUserId }
+      const response = await authFetch(GROUPS_API_BASE_URL, {
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, `Failed to fetch groups`);
@@ -100,11 +99,10 @@ export function usePasswordManager(currentUserId?: string | null) {
     if (!currentUserId) throw new Error('User not authenticated');
     try {
       const payload = { ...entryData, isFavorite: entryData.isFavorite || false };
-      const response = await fetch(API_BASE_URL, {
+      const response = await authFetch(API_BASE_URL, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-User-ID': currentUserId,
         },
         body: JSON.stringify(payload),
       });
@@ -128,11 +126,10 @@ export function usePasswordManager(currentUserId?: string | null) {
       // Ensure isFavorite is explicitly set, defaulting to false if undefined
       payload.isFavorite = typeof updatedEntry.isFavorite === 'boolean' ? updatedEntry.isFavorite : false;
       
-      const response = await fetch(`${API_BASE_URL}/${updatedEntry.id}`, {
+      const response = await authFetch(`${API_BASE_URL}/${updatedEntry.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'X-User-ID': currentUserId,
         },
         body: JSON.stringify(payload),
       });
@@ -152,9 +149,8 @@ export function usePasswordManager(currentUserId?: string | null) {
   const deletePassword = useCallback(async (id: string) => {
     if (!currentUserId) throw new Error('User not authenticated');
     try {
-      const response = await fetch(`${API_BASE_URL}/${id}`, {
+      const response = await authFetch(`${API_BASE_URL}/${id}`, {
         method: 'DELETE',
-        headers: { 'X-User-ID': currentUserId }
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, `Failed to delete password`);
@@ -172,12 +168,10 @@ export function usePasswordManager(currentUserId?: string | null) {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('userId', currentUserId);
 
-      const response = await fetch(`${API_BASE_URL}/import`, {
+      const response = await authFetch(`${API_BASE_URL}/import`, {
         method: 'POST',
         body: formData,
-        headers: { 'X-User-ID': currentUserId }
       });
 
       const result = await response.json();
@@ -195,8 +189,7 @@ export function usePasswordManager(currentUserId?: string | null) {
   const exportPasswordsToCSV = useCallback(async (): Promise<boolean> => {
     if (!currentUserId) throw new Error('User not authenticated for export.');
     try {
-      const response = await fetch(`${API_BASE_URL}/export`, {
-        headers: { 'X-User-ID': currentUserId }
+      const response = await authFetch(`${API_BASE_URL}/export`, {
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, `Failed to export passwords`);
@@ -239,9 +232,8 @@ export function usePasswordManager(currentUserId?: string | null) {
   const clearAllPasswords = useCallback(async () => {
     if (!currentUserId) throw new Error('User not authenticated');
     try {
-      const response = await fetch(`${API_BASE_URL}/clear`, {
+      const response = await authFetch(`${API_BASE_URL}/clear`, {
         method: 'POST', 
-        headers: { 'X-User-ID': currentUserId }
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, `Failed to clear passwords`);
@@ -258,9 +250,9 @@ export function usePasswordManager(currentUserId?: string | null) {
   const createGroup = useCallback(async (name: string): Promise<Group> => {
     if (!currentUserId) throw new Error('User not authenticated');
     try {
-      const response = await fetch(GROUPS_API_BASE_URL, {
+      const response = await authFetch(GROUPS_API_BASE_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': currentUserId },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       });
       if (!response.ok) {
@@ -279,9 +271,9 @@ export function usePasswordManager(currentUserId?: string | null) {
   const addGroupMember = useCallback(async (groupId: string, userIdToAdd: string, role: 'member' | 'admin', displayName?: string): Promise<Group> => {
     if (!currentUserId) throw new Error('User not authenticated');
     try {
-      const response = await fetch(`${GROUPS_API_BASE_URL}/${groupId}/members`, {
+      const response = await authFetch(`${GROUPS_API_BASE_URL}/${groupId}/members`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': currentUserId },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userIdToAdd, role, displayName }), // Pass displayName
       });
       if (!response.ok) {
@@ -300,9 +292,8 @@ export function usePasswordManager(currentUserId?: string | null) {
   const removeGroupMember = useCallback(async (groupId: string, memberUidToRemove: string): Promise<Group> => {
     if (!currentUserId) throw new Error('User not authenticated');
     try {
-      const response = await fetch(`${GROUPS_API_BASE_URL}/${groupId}/members/${memberUidToRemove}`, {
+      const response = await authFetch(`${GROUPS_API_BASE_URL}/${groupId}/members/${memberUidToRemove}`, {
         method: 'DELETE',
-        headers: { 'X-User-ID': currentUserId },
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, 'Failed to remove group member');
@@ -320,9 +311,9 @@ export function usePasswordManager(currentUserId?: string | null) {
   const updateGroupMemberRole = useCallback(async (groupId: string, memberUid: string, role: 'member' | 'admin'): Promise<Group> => {
     if (!currentUserId) throw new Error('User not authenticated');
     try {
-      const response = await fetch(`${GROUPS_API_BASE_URL}/${groupId}/members/${memberUid}`, {
+      const response = await authFetch(`${GROUPS_API_BASE_URL}/${groupId}/members/${memberUid}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': currentUserId },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ role }),
       });
       if (!response.ok) {
@@ -341,9 +332,8 @@ export function usePasswordManager(currentUserId?: string | null) {
   const deleteGroup = useCallback(async (groupId: string): Promise<void> => {
     if (!currentUserId) throw new Error('User not authenticated');
     try {
-      const response = await fetch(`${GROUPS_API_BASE_URL}/${groupId}`, {
+      const response = await authFetch(`${GROUPS_API_BASE_URL}/${groupId}`, {
         method: 'DELETE',
-        headers: { 'X-User-ID': currentUserId },
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, 'Failed to delete group');
@@ -360,9 +350,9 @@ export function usePasswordManager(currentUserId?: string | null) {
   const updateGroup = useCallback(async (groupId: string, name: string): Promise<Group> => {
     if (!currentUserId) throw new Error('User not authenticated');
     try {
-      const response = await fetch(`${GROUPS_API_BASE_URL}/${groupId}`, {
+      const response = await authFetch(`${GROUPS_API_BASE_URL}/${groupId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': currentUserId },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
       });
       if (!response.ok) {
@@ -382,9 +372,9 @@ export function usePasswordManager(currentUserId?: string | null) {
   const shareCategoryWithGroup = useCallback(async (categoryName: string, groupId: string): Promise<CategoryShare | undefined> => {
     if (!currentUserId) throw new Error('User not authenticated for sharing category');
     try {
-      const response = await fetch(`${CATEGORIES_API_BASE_URL}/share`, {
+      const response = await authFetch(`${CATEGORIES_API_BASE_URL}/share`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': currentUserId },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ categoryName, groupId }),
       });
       if (!response.ok) {
@@ -403,9 +393,9 @@ export function usePasswordManager(currentUserId?: string | null) {
   const unshareCategoryFromGroup = useCallback(async (categoryName: string, groupId: string): Promise<void> => {
     if (!currentUserId) throw new Error('User not authenticated for unsharing category');
     try {
-      const response = await fetch(`${CATEGORIES_API_BASE_URL}/unshare`, {
+      const response = await authFetch(`${CATEGORIES_API_BASE_URL}/unshare`, {
         method: 'POST', 
-        headers: { 'Content-Type': 'application/json', 'X-User-ID': currentUserId },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ categoryName, groupId }),
       });
       if (!response.ok) {
@@ -429,8 +419,7 @@ export function usePasswordManager(currentUserId?: string | null) {
       return [];
     }
     try {
-      const response = await fetch(`${CATEGORIES_API_BASE_URL}/shares?ownerId=${encodeURIComponent(ownerId)}&categoryName=${encodeURIComponent(categoryName)}`, {
-        headers: { 'X-User-ID': currentUserId },
+      const response = await authFetch(`${CATEGORIES_API_BASE_URL}/shares?ownerId=${encodeURIComponent(ownerId)}&categoryName=${encodeURIComponent(categoryName)}`, {
       });
       if (!response.ok) {
         const errorMessage = await parseErrorResponse(response, 'Failed to fetch category shares');

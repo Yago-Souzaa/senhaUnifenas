@@ -1,5 +1,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
+import { getUserId } from '@/lib/auth';
+import { encryptEntry } from '@/lib/crypto';
 import { connectToDatabase } from '@/lib/mongodb';
 import type { PasswordEntry, HistoryEntry } from '@/types'; // Added HistoryEntry
 
@@ -73,13 +75,13 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get('file') as File | null;
-    const userId = formData.get('userId') as string | null; 
+    const userId = await getUserId(request);
 
     if (!file) {
       return NextResponse.json({ message: 'No file uploaded' }, { status: 400 });
     }
     if (!userId) {
-      return NextResponse.json({ message: 'User ID not provided in form data' }, { status: 400 });
+      return NextResponse.json({ message: 'Not authenticated' }, { status: 401 });
     }
 
     const fileText = await file.text();
@@ -102,7 +104,7 @@ export async function POST(request: NextRequest) {
             const now = new Date();
             const historyEntry: HistoryEntry = { action: 'created', userId: userId, timestamp: now };
             
-            newEntriesToInsert.push({
+            newEntriesToInsert.push(encryptEntry({
                 ...entry, 
                 ownerId: userId,
                 userId: userId, // Keep for legacy if any part of system still relies on it
@@ -113,7 +115,7 @@ export async function POST(request: NextRequest) {
                 history: [historyEntry],
                 isDeleted: false,
                 sharedWith: [], // Initialize as empty, individual sharing is deprecated
-            });
+            }));
         }
     }
 
