@@ -1,23 +1,23 @@
 
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { usePasswordManager } from '@/hooks/usePasswordManager';
-import type { PasswordEntry, FirebaseUser } from '@/types';
+import type { PasswordEntry, FirebaseUser, Group, CategoryShare } from '@/types';
 import { Header } from '@/components/layout/Header';
-import { PasswordGrid, canManageEntry, matchesSearch, searchTerms } from '@/components/password/PasswordGrid';
-import { SheetTabs, type SheetTab } from '@/components/password/SheetTabs';
+import { PasswordList } from '@/components/password/PasswordList';
 import { AddEditPasswordDialog, type PasswordFormValues } from '@/components/password/AddEditPasswordDialog';
 import { ImportPasswordsDialog } from '@/components/password/ImportPasswordsDialog';
 import { PasswordGeneratorDialog } from '@/components/password/PasswordGeneratorDialog';
 import { ClearAllPasswordsDialog } from '@/components/password/ClearAllPasswordsDialog';
-import { ShareCategoryDialog } from '@/components/category/ShareCategoryDialog';
+// SharePasswordDialog import removed
+import { ShareCategoryDialog } from '@/components/category/ShareCategoryDialog'; // New import
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 
 import { useToast } from '@/hooks/use-toast';
-import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, KeyRound, EllipsisVertical, X } from 'lucide-react';
+import { PlusCircle, Upload, Zap, Search, ShieldAlert, Trash2, FileDown, KeyRound, EllipsisVertical, FolderKanban, Plus, X, Share2, Star } from 'lucide-react'; // Added Star
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
@@ -28,6 +28,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
@@ -36,9 +37,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { cn } from '@/lib/utils';
 
 import { auth, googleProvider } from '@/lib/firebase';
-import { ALLOWED_EMAIL_DOMAINS, isAllowedEmail } from '@/lib/allowedDomains';
 import {
   signInWithPopup,
   signOut,
@@ -48,7 +50,6 @@ import {
 
 const FAVORITES_TAB_NAME = "⭐ Favoritas";
 const ALL_TAB_NAME = "Todas";
-const ALLOWED_DOMAINS_TEXT = ALLOWED_EMAIL_DOMAINS.map(d => `@${d}`).join(', ');
 
 
 const GoogleIcon = () => (
@@ -60,6 +61,8 @@ const GoogleIcon = () => (
     <path fill="none" d="M0 0h48v48H0z"/>
   </svg>
 );
+
+const ALLOWED_GOOGLE_DOMAINS = ['@unifenas.br', 'aluno.unifenas.br', '@adm.unifenas.br'];
 
 
 export default function HomePage() {
@@ -93,11 +96,9 @@ export default function HomePage() {
   const [isClearAllDialogOpen, setIsClearAllDialogOpen] = useState(false);
   const [editingPassword, setEditingPassword] = useState<PasswordEntry | Partial<PasswordEntry> | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const tabBeforeSearch = useRef<string | null>(null);
 
   const [userCategories, setUserCategories] = useState<string[]>([]);
-  const [activeTab, setActiveTab] = useState<string>(ALL_TAB_NAME);
+  const [activeTab, setActiveTab] = useState<string>(FAVORITES_TAB_NAME); // Default to Favorites
   const [isAddCategoryDialogOpen, setIsAddCategoryDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isDeleteCategoryDialogOpen, setIsDeleteCategoryDialogOpen] = useState(false);
@@ -120,21 +121,17 @@ export default function HomePage() {
         setAuthError(null);
         const storedCategories = localStorage.getItem(`userCategories_${user.uid}`);
         setUserCategories(storedCategories ? JSON.parse(storedCategories) : []);
-        setActiveTab(localStorage.getItem(`activeTab_${user.uid}`) || ALL_TAB_NAME);
+        setActiveTab(FAVORITES_TAB_NAME); // Default to Favorites on login
         fetchGroups().catch(err => {
             console.warn("HomePage: fetchGroups failed on auth state change:", err.message);
         });
       } else {
         setUserCategories([]);
-        setActiveTab(ALL_TAB_NAME);
+        setActiveTab(FAVORITES_TAB_NAME);
       }
     });
     return () => unsubscribe();
   }, [fetchGroups]);
-
-  useEffect(() => {
-    if (firebaseUser) localStorage.setItem(`activeTab_${firebaseUser.uid}`, activeTab);
-  }, [activeTab, firebaseUser]);
 
   useEffect(() => {
     if (firebaseUser && passwords) {
@@ -157,9 +154,13 @@ export default function HomePage() {
       )
       .map(cat => cat.trim())
       .filter(cat => cat && cat.length > 0)
+      // Capitalize first letter of each category for display, then sort
       .map(cat => cat.charAt(0).toUpperCase() + cat.slice(1)) 
       .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
       
+      // Check if a deep comparison is actually needed or if length and order is enough.
+      // For now, a simple stringify comparison might lead to unnecessary updates if order changes but content is same.
+      // However, since we sort, this should be mostly fine.
       if (JSON.stringify(combinedCategories) !== JSON.stringify(userCategories.map(cat => cat.charAt(0).toUpperCase() + cat.slice(1)))) {
          setUserCategories(combinedCategories);
          localStorage.setItem(`userCategories_${firebaseUser.uid}`, JSON.stringify(combinedCategories));
@@ -167,21 +168,6 @@ export default function HomePage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [passwords, firebaseUser]);
-
-  // "/" or Ctrl+K focuses the search, like a spreadsheet's find box.
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement;
-      const typing = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
-      if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-      }
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
 
 
   const categoriesWithExternalShares = useMemo(() => {
@@ -211,7 +197,7 @@ export default function HomePage() {
       case 'auth/too-many-requests': errorMessage = "Muitas tentativas falharam. Tente novamente mais tarde."; break;
       case 'auth/popup-closed-by-user': errorMessage = "O pop-up de login foi fechado antes da conclusão."; break;
       case 'auth/account-exists-with-different-credential': errorMessage = "Já existe uma conta com este endereço de e-mail, mas com um método de login diferente."; break;
-      case 'auth/unauthorized-domain': errorMessage = `O domínio do seu e-mail não está autorizado. Use domínios permitidos: ${ALLOWED_DOMAINS_TEXT}.`; break;
+      case 'auth/unauthorized-domain': errorMessage = `O domínio do seu e-mail não está autorizado. Use domínios permitidos: ${ALLOWED_GOOGLE_DOMAINS.join(', ')}.`; break;
       default: errorMessage = (error as Error).message || "Ocorreu um erro de autenticação desconhecido.";
     }
     setAuthError(errorMessage);
@@ -223,11 +209,21 @@ export default function HomePage() {
     setAuthError(null);
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      if (!isAllowedEmail(result.user.email)) {
+      const userEmail = result.user.email;
+      if (userEmail) {
+        const isAllowed = ALLOWED_GOOGLE_DOMAINS.some(domain => userEmail.endsWith(domain));
+        if (!isAllowed) {
+          await signOut(auth);
+          const errorMessage = `Acesso permitido apenas para usuários dos domínios: ${ALLOWED_GOOGLE_DOMAINS.join(', ')}.`;
+          setAuthError(errorMessage);
+          toast({ title: "Acesso Restrito", description: errorMessage, variant: "destructive" });
+          return;
+        }
+      } else {
         await signOut(auth);
-        const errorMessage = `Acesso permitido apenas para usuários dos domínios: ${ALLOWED_DOMAINS_TEXT}.`;
+        const errorMessage = "Não foi possível verificar o domínio do email. Tente novamente.";
         setAuthError(errorMessage);
-        toast({ title: "Acesso Restrito", description: errorMessage, variant: "destructive" });
+        toast({ title: "Erro na Verificação", description: errorMessage, variant: "destructive" });
         return;
       }
       toast({ title: "Login com Google bem-sucedido!", description: "Bem-vindo!" });
@@ -304,22 +300,6 @@ export default function HomePage() {
     setIsAddEditDialogOpen(true);
   };
 
-  const handleToggleFavorite = async (entry: PasswordEntry) => {
-    try {
-      await updatePassword({
-        id: entry.id,
-        nome: entry.nome,
-        login: entry.login,
-        senha: entry.senha,
-        categoria: entry.categoria,
-        customFields: entry.customFields || [],
-        isFavorite: !entry.isFavorite,
-      });
-    } catch (e: any) {
-      toast({ title: "Erro ao Favoritar", description: (e as Error).message || "Não foi possível alterar a favorita.", variant: "destructive" });
-    }
-  };
-
   const handleDeletePassword = async (id: string) => {
     if (!firebaseUser) {
       toast({ title: "Não autenticado", description: "Você precisa estar logado para deletar senhas.", variant: "destructive" });
@@ -329,7 +309,7 @@ export default function HomePage() {
     try {
       await deletePassword(id);
       if (entryToDelete) {
-        toast({ title: "Excluída", description: `Senha "${entryToDelete.nome}" excluída.` });
+        toast({ title: "Sucesso!", description: `Senha para "${entryToDelete.nome}" marcada como deletada.`, variant: "destructive" });
       }
     } catch (e: any) {
       toast({ title: "Erro ao Deletar", description: (e as Error).message || "Não foi possível deletar a senha.", variant: "destructive" });
@@ -377,7 +357,7 @@ export default function HomePage() {
       toast({ title: "Não autenticado", description: "Você precisa estar logado para exportar senhas.", variant: "destructive" });
       return;
     }
-    if (passwords.length === 0) {
+    if (passwords.length === 0 && (activeTab === ALL_TAB_NAME || activeTab === FAVORITES_TAB_NAME)) { 
       toast({ title: "Nada para Exportar", description: "Não há senhas para exportar.", variant: "default" });
       return;
     }
@@ -400,22 +380,6 @@ export default function HomePage() {
   const handleOpenShareCategoryDialog = (categoryName: string) => {
     setCategoryToShare(categoryName);
     setIsShareCategoryDialogOpen(true);
-  };
-
-  const handleSearchChange = (value: string) => {
-    if (!searchTerm && value) {
-      tabBeforeSearch.current = activeTab;
-      setActiveTab(ALL_TAB_NAME);
-    } else if (searchTerm && !value && tabBeforeSearch.current) {
-      setActiveTab(tabBeforeSearch.current);
-      tabBeforeSearch.current = null;
-    }
-    setSearchTerm(value);
-  };
-
-  const handleSelectTab = (name: string) => {
-    tabBeforeSearch.current = null;
-    setActiveTab(name);
   };
 
 
@@ -486,48 +450,37 @@ export default function HomePage() {
   }, [firebaseUser, categoryToDelete, passwords, userCategories, toast, fetchCategorySharesForOwner]);
 
 
-  const inTab = useCallback((p: PasswordEntry, tab: string) => {
-    if (tab === FAVORITES_TAB_NAME) return !!p.isFavorite;
-    if (tab === ALL_TAB_NAME) return true;
-    const lowerTab = tab.trim().toLowerCase();
-    const isOwnedInCategory = p.ownerId === firebaseUser?.uid && p.categoria?.trim().toLowerCase() === lowerTab;
-    const isSharedViaThisCategoryName = p.sharedVia?.categoryName?.trim().toLowerCase() === lowerTab;
-    return isOwnedInCategory || isSharedViaThisCategoryName;
-  }, [firebaseUser]);
-
-  const matchingPasswords = useMemo(() => {
+  const filteredPasswords = useMemo(() => {
     if (!firebaseUser || !passwords) return [];
-    const terms = searchTerms(searchTerm);
-    return passwords.filter(p => !p.isDeleted && matchesSearch(p, terms));
-  }, [passwords, searchTerm, firebaseUser]);
+    let tempPasswords = passwords.filter(p => !p.isDeleted);
 
-  const filteredPasswords = useMemo(
-    () => matchingPasswords.filter(p => inTab(p, activeTab)),
-    [matchingPasswords, activeTab, inTab]
-  );
+    if (activeTab === FAVORITES_TAB_NAME) {
+      tempPasswords = tempPasswords.filter(p => p.isFavorite);
+    } else if (activeTab !== ALL_TAB_NAME) {
+      const lowerActiveTab = activeTab.trim().toLowerCase();
+      tempPasswords = tempPasswords.filter(p => {
+        const isOwnedInCategory = p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === lowerActiveTab;
+        const isSharedViaThisCategoryName = p.sharedVia && p.sharedVia.categoryName?.trim().toLowerCase() === lowerActiveTab;
+        return isOwnedInCategory || isSharedViaThisCategoryName;
+      });
+    }
 
-  const tabs = useMemo<SheetTab[]>(() => {
-    if (!firebaseUser) return [];
-    const count = (name: string) => matchingPasswords.filter(p => inTab(p, name)).length;
-    return [
-      { name: FAVORITES_TAB_NAME, label: 'Favoritas', count: count(FAVORITES_TAB_NAME), favorites: true },
-      { name: ALL_TAB_NAME, label: ALL_TAB_NAME, count: matchingPasswords.length },
-      ...userCategories.map(category => {
-        const lower = category.trim().toLowerCase();
-        const ownsAny = passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === lower && !p.isDeleted);
-        return {
-          name: category,
-          label: category,
-          count: count(category),
-          sharedWithMe: categoriesWithExternalShares.has(lower),
-          canShare: true,
-          canDelete: !ownsAny,
-        };
-      }),
-    ];
-  }, [firebaseUser, matchingPasswords, userCategories, passwords, categoriesWithExternalShares, inTab]);
-
-  const canManageSomething = !!firebaseUser && filteredPasswords.some(p => canManageEntry(p, firebaseUser.uid, groups));
+    if (searchTerm) {
+      const lowerSearchTerm = searchTerm.toLowerCase();
+      tempPasswords = tempPasswords.filter(p =>
+        p.nome.toLowerCase().includes(lowerSearchTerm) ||
+        p.login.toLowerCase().includes(lowerSearchTerm) ||
+        (p.categoria && p.categoria.toLowerCase().includes(lowerSearchTerm)) ||
+        (p.customFields && p.customFields.some(cf =>
+            cf.label.toLowerCase().includes(lowerSearchTerm) ||
+            cf.value.toLowerCase().includes(lowerSearchTerm)
+        )) ||
+        (p.sharedVia?.groupName && p.sharedVia.groupName.toLowerCase().includes(lowerSearchTerm)) ||
+        (p.sharedVia?.categoryOwnerId && p.sharedVia.categoryOwnerId.toLowerCase().includes(lowerSearchTerm))
+      );
+    }
+    return tempPasswords.sort((a,b) => a.nome.localeCompare(b.nome));
+  }, [passwords, activeTab, searchTerm, firebaseUser]);
 
 
   if (authLoading) { 
@@ -540,10 +493,10 @@ export default function HomePage() {
   }
 
   return (
-    <div className={firebaseUser ? "h-screen flex flex-col overflow-hidden" : "min-h-screen flex flex-col"}>
+    <div className="min-h-screen flex flex-col">
       <Header user={firebaseUser} onLogout={handleLogoutFirebase} />
+      <main className="container mx-auto py-8 px-4 flex-grow">
         {!firebaseUser ? (
-          <main className="container mx-auto py-8 px-4 flex-grow">
           <div className="flex justify-center items-center flex-col mt-8 md:mt-16">
             <Card className="w-full max-w-md shadow-xl">
               <CardHeader className="text-center">
@@ -559,105 +512,207 @@ export default function HomePage() {
                   Entrar com Google
                 </Button>
                 <p className="text-xs text-muted-foreground text-center mt-2">
-                  Domínios permitidos: {ALLOWED_DOMAINS_TEXT}.
+                  Domínios permitidos: {ALLOWED_GOOGLE_DOMAINS.join(', ')}.
                 </p>
               </CardContent>
             </Card>
           </div>
-          </main>
         ) : (
           <>
-            <div className="flex items-center gap-2 px-3 py-2 bg-white border-b border-[#dadce0] shrink-0">
-              <div className="relative flex-1 max-w-2xl">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder="Buscar em todas as abas: nome, IP, usuário, acesso...  ( / )"
-                  value={searchTerm}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Escape') handleSearchChange(''); }}
-                  className="pl-9 pr-9 h-9 bg-[#f1f3f4] border-transparent focus-visible:bg-white"
-                  autoFocus
-                />
-                {searchTerm && (
-                  <button type="button" onClick={() => handleSearchChange('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground" title="Limpar busca (Esc)">
-                    <X size={16} />
-                  </button>
-                )}
-              </div>
-              <span className="text-xs text-muted-foreground whitespace-nowrap hidden sm:inline">
-                {filteredPasswords.length} {filteredPasswords.length === 1 ? 'linha' : 'linhas'}
-                {canManageSomething && ' · clique copia · duplo clique edita'}
-              </span>
-              <div className="ml-auto flex gap-2">
-                <Button onClick={handleOpenAddPasswordDialog} size="sm" className="bg-primary hover:bg-primary/90">
-                  <PlusCircle size={16} className="mr-1.5" /> Nova senha
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <EllipsisVertical size={16} />
-                      <span className="sr-only">Mais ações</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setIsImportDialogOpen(true)}>
-                      <Upload size={16} className="mr-2" /> Importar CSV
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={handleExportPasswords}>
-                      <FileDown size={16} className="mr-2" /> Exportar CSV
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setIsGeneratorDialogOpen(true)}>
-                      <Zap size={16} className="mr-2" /> Gerar Senha
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onSelect={() => setIsClearAllDialogOpen(true)}
-                      className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                    >
-                      <Trash2 size={16} className="mr-2" /> Limpar Tudo
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
-
             {passwordManagerError && ( 
-             <Alert variant="destructive" className="m-3 w-auto">
+             <Alert variant="destructive" className="mb-4">
                 <ShieldAlert className="h-5 w-5" />
                 <AlertTitle>Erro de Conexão ou Dados</AlertTitle>
                 <AlertDescription>
-                  {passwordManagerError} Tente recarregar a página.
+                  {passwordManagerError} Verifique os logs do servidor (backend), a conexão com o banco de dados (MongoDB URI, IP Allowlist no Atlas) e as configurações da API. Tente recarregar a página.
                 </AlertDescription>
               </Alert>
             )}
 
-            <div className="flex-1 min-h-0">
-              <PasswordGrid
-                passwords={filteredPasswords}
-                isLoading={isLoading}
-                searchTerm={searchTerm}
-                showCategory={activeTab === ALL_TAB_NAME || activeTab === FAVORITES_TAB_NAME}
-                currentUserId={firebaseUser.uid}
-                userGroups={groups}
-                onEdit={handleEditPassword}
-                onDelete={handleDeletePassword}
-                onToggleFavorite={handleToggleFavorite}
-              />
+            <div className="mb-8 p-6 bg-card rounded-lg shadow-md">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
+                <div className="relative md:col-span-1">
+                  <Input
+                    type="search"
+                    placeholder="Pesquisar senhas..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                </div>
+                <div className="md:col-span-2 flex flex-wrap gap-2 justify-end">
+                  <Button onClick={handleOpenAddPasswordDialog} className="bg-primary hover:bg-primary/90">
+                    <PlusCircle size={18} className="mr-2" /> Adicionar Nova
+                  </Button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="hover:bg-secondary">
+                        <EllipsisVertical size={18} className="mr-0 md:mr-2" /> <span className="hidden md:inline">Mais Ações</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={() => setIsImportDialogOpen(true)}>
+                        <Upload size={16} className="mr-2" /> Importar CSV
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={handleExportPasswords}>
+                        <FileDown size={16} className="mr-2" /> Exportar CSV
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setIsGeneratorDialogOpen(true)}>
+                        <Zap size={16} className="mr-2" /> Gerar Senha
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onSelect={() => setIsClearAllDialogOpen(true)}
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                      >
+                        <Trash2 size={16} className="mr-2" /> Limpar Tudo
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
             </div>
 
-            <SheetTabs
-              tabs={tabs}
-              active={activeTab}
-              searching={!!searchTerm}
-              onSelect={handleSelectTab}
-              onAdd={() => setIsAddCategoryDialogOpen(true)}
-              onShare={handleOpenShareCategoryDialog}
-              onDelete={(name) => { setCategoryToDelete(name); setIsDeleteCategoryDialogOpen(true); }}
-            />
+            <div className="mb-4">
+               <div className="flex items-center border-b">
+                  <ScrollArea className="w-full whitespace-nowrap">
+                     <div className="flex space-x-1 pb-1">
+                        <Button
+                           variant={activeTab === FAVORITES_TAB_NAME ? "secondary" : "ghost"}
+                           size="sm"
+                           onClick={() => setActiveTab(FAVORITES_TAB_NAME)}
+                           className={cn(
+                              "flex items-center gap-1 h-8 px-3 rounded-md",
+                              activeTab === FAVORITES_TAB_NAME ? "font-semibold text-yellow-500" : "hover:bg-secondary hover:text-secondary-foreground"
+                           )}
+                        >
+                           <Star size={14} className={cn(activeTab === FAVORITES_TAB_NAME && "fill-yellow-400 text-yellow-500", activeTab !== FAVORITES_TAB_NAME && "text-muted-foreground")} /> {FAVORITES_TAB_NAME.split(" ")[1]}
+                        </Button>
+                        <Button
+                           variant={activeTab === ALL_TAB_NAME ? "secondary" : "ghost"}
+                           size="sm"
+                           onClick={() => setActiveTab(ALL_TAB_NAME)}
+                           className={cn(
+                              "flex items-center gap-1 h-8 px-3 rounded-md",
+                              activeTab !== ALL_TAB_NAME && "hover:bg-secondary hover:text-secondary-foreground"
+                           )}
+                        >
+                           <FolderKanban size={14} /> {ALL_TAB_NAME}
+                        </Button>
+
+                        {userCategories.map(category => {
+                           const lowerTrimmedCategory = category.trim().toLowerCase();
+                           const hasExternalShare = categoriesWithExternalShares.has(lowerTrimmedCategory);
+                           // A categoria é "própria" se existe alguma senha do usuário nela OU se ela foi adicionada manualmente (está em userCategories mas não necessariamente tem senhas)
+                           const isOwnedCategoryAndExists = passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === lowerTrimmedCategory) || userCategories.includes(category);
+                           const isCategoryEmptyForDeletion = !passwords.some(p => p.ownerId === firebaseUser.uid && p.categoria?.trim().toLowerCase() === lowerTrimmedCategory && !p.isDeleted);
+
+                           return (
+                           <div key={category} className="relative group flex items-center">
+                              <Button
+                                 variant={activeTab === category ? "secondary" : "ghost"}
+                                 size="sm"
+                                 onClick={() => setActiveTab(category)}
+                                 className={cn(
+                                    "flex items-center gap-1.5 h-8 px-3 rounded-md pr-2", 
+                                    hasExternalShare 
+                                      ? (activeTab === category ? "text-accent font-semibold" : "text-accent hover:text-accent hover:bg-accent/10") 
+                                      : (activeTab !== category && "hover:bg-secondary hover:text-secondary-foreground") 
+                                  )}
+                              >
+                                 <FolderKanban size={14} className={cn(hasExternalShare && "text-accent")} />
+                                 {category}
+                              </Button>
+                              {isOwnedCategoryAndExists && ( 
+                                <Button
+                                    asChild
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-accent/20 ml-0.5"
+                                    title={`Compartilhar categoria "${category}"`}
+                                    onClick={(e) => {
+                                        e.stopPropagation(); e.preventDefault();
+                                        handleOpenShareCategoryDialog(category);
+                                    }}
+                                >
+                                  <div><Share2 size={12} className="text-accent/80 hover:text-accent" /></div>
+                                </Button>
+                              )}
+                              {isOwnedCategoryAndExists && isCategoryEmptyForDeletion && (
+                                 <Button
+                                    asChild
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 opacity-0 group-hover:opacity-100 hover:bg-destructive/20 ml-0.5"
+                                 >
+                                    <div
+                                       role="button"
+                                       tabIndex={0}
+                                       onClick={(e) => {
+                                       e.stopPropagation(); e.preventDefault();
+                                       setCategoryToDelete(category); setIsDeleteCategoryDialogOpen(true);
+                                       }}
+                                       onKeyDown={(e) => {
+                                       if (e.key === 'Enter' || e.key === ' ') {
+                                          e.stopPropagation(); e.preventDefault();
+                                          setCategoryToDelete(category); setIsDeleteCategoryDialogOpen(true);
+                                       }}}
+                                       title={`Excluir categoria ${category}`}
+                                    >
+                                       <X size={12} className="text-destructive/80 hover:text-destructive" />
+                                    </div>
+                                 </Button>
+                              )}
+                           </div>
+                           );
+                        })}
+                     </div>
+                     <ScrollBar orientation="horizontal" />
+                  </ScrollArea>
+                  <AlertDialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
+                     <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="ml-2 shrink-0 hover:bg-secondary hover:text-secondary-foreground" onClick={() => setIsAddCategoryDialogOpen(true)}>
+                           <Plus size={20} />
+                           <span className="sr-only">Adicionar Nova Categoria</span>
+                        </Button>
+                     </AlertDialogTrigger>
+                     <AlertDialogContent>
+                        <AlertDialogHeader>
+                           <AlertDialogTitle>Adicionar Nova Categoria</AlertDialogTitle>
+                           <AlertDialogDescription>Digite o nome para a nova aba de categoria.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <Input
+                           placeholder="Nome da Categoria"
+                           value={newCategoryName}
+                           onChange={(e) => setNewCategoryName(e.target.value)}
+                           onKeyDown={(e) => {
+                           if (e.key === 'Enter') { e.preventDefault(); if(handleAddCategory()){ setIsAddCategoryDialogOpen(false); }}}}
+                        />
+                        <AlertDialogFooter>
+                           <AlertDialogCancel onClick={() => { setNewCategoryName(''); setIsAddCategoryDialogOpen(false); }}>Cancelar</AlertDialogCancel>
+                           <AlertDialogAction onClick={() => { if(handleAddCategory()){ setIsAddCategoryDialogOpen(false); }}}>Adicionar</AlertDialogAction>
+                        </AlertDialogFooter>
+                     </AlertDialogContent>
+                  </AlertDialog>
+               </div>
+               <div className="mt-4">
+                  <PasswordList
+                     passwords={filteredPasswords}
+                     isLoading={isLoading} 
+                     onEdit={handleEditPassword}
+                     onDelete={handleDeletePassword}
+                     searchTerm={searchTerm}
+                     activeTab={activeTab}
+                     currentUserId={firebaseUser.uid}
+                     userGroups={groups}
+                  />
+               </div>
+            </div>
           </>
         )}
+      </main>
 
       <AddEditPasswordDialog
         isOpen={isAddEditDialogOpen}
@@ -699,27 +754,7 @@ export default function HomePage() {
             fetchCategorySharesForOwner={fetchCategorySharesForOwner}
         />
       )}
-      <AlertDialog open={isAddCategoryDialogOpen} onOpenChange={setIsAddCategoryDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Nova categoria</AlertDialogTitle>
-            <AlertDialogDescription>Digite o nome da nova aba.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <Input
-            placeholder="Nome da categoria"
-            value={newCategoryName}
-            onChange={(e) => setNewCategoryName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') { e.preventDefault(); if (handleAddCategory()) { setIsAddCategoryDialogOpen(false); } }
-            }}
-          />
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setNewCategoryName(''); setIsAddCategoryDialogOpen(false); }}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={() => { if (handleAddCategory()) { setIsAddCategoryDialogOpen(false); } }}>Adicionar</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      <AlertDialog open={isDeleteCategoryDialogOpen} onOpenChange={setIsDeleteCategoryDialogOpen}>
+       <AlertDialog open={isDeleteCategoryDialogOpen} onOpenChange={setIsDeleteCategoryDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir Categoria "{categoryToDelete}"?</AlertDialogTitle>
@@ -736,11 +771,10 @@ export default function HomePage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {!firebaseUser && (
-        <footer className="text-center py-4 text-sm text-muted-foreground border-t mt-auto">
-          SenhaFacil &copy; {currentYear !== null ? currentYear : new Date().getFullYear()}
-        </footer>
-      )}
+      <footer className="text-center py-4 text-sm text-muted-foreground border-t mt-auto">
+        SenhaFacil &copy; {currentYear !== null ? currentYear : new Date().getFullYear()}
+      </footer>
     </div>
   );
 }
+

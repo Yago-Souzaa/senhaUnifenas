@@ -36,11 +36,11 @@ const getInitials = (name?: string | null, email?: string | null): string => {
 
 export function Header({ user, onLogout }: HeaderProps) {
   return (
-    <header className="bg-primary text-primary-foreground py-1.5 shadow-md shrink-0">
-      <div className="px-4 flex items-center justify-between gap-3">
-        <Link href="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
-          <KeyRound size={22} />
-          <h1 className="text-xl font-headline font-bold">SenhaFacil</h1>
+    <header className="bg-primary text-primary-foreground py-3 shadow-md">
+      <div className="container mx-auto flex items-center justify-between gap-3">
+        <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
+          <KeyRound size={32} />
+          <h1 className="text-3xl font-headline font-bold">SenhaFacil</h1>
         </Link>
         {user && (
           <DropdownMenu>
